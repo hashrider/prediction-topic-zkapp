@@ -2,7 +2,7 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, multi-market ]
+    branches: [ main, multi-market, zkwasm-deploy ]
     tags: [ 'v*' ]
 
 env:
