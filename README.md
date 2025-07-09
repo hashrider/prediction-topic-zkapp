@@ -289,7 +289,7 @@ node dist/test_user.js
 ```rust
 pub const PLATFORM_FEE_RATE: u64 = 100;        // 1% (100/10000)
 pub const FEE_BASIS_POINTS: u64 = 10000;       // Basis points denominator
-pub const NEW_PLAYER_INITIAL_BALANCE: u64 = 1000000; // Starting balance
+pub const NEW_PLAYER_INITIAL_BALANCE: u64 = 0; // Starting balance
 pub const ADMIN_PUBKEY: [u64; 4] = [...];      // Admin public key
 ```
 
