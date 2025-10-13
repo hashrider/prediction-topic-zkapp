@@ -1,22 +1,21 @@
 {
     "type": "module",
-      "dependencies": {
-    "@sanity/client": "^6.24.3",
-    "@types/bn.js": "^5.1.5",
-    "@types/node": "^20.14.2",
-    "@types/sha256": "^0.2.2",
-    "delphinus-curves": "github:DelphinusLab/delphinus-curves#xgao",
-    "dotenv": "^16.3.1",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.4.5",
-    "zkwasm-minirollup-rpc": "github:DelphinusLab/zkWasm-minirollup-rpc#52bd36c3d6f31c152175016a1d5e3a910738a1ae",
-    "zkwasm-service-cli": "git+https://github.com/DelphinusLab/zkWasm-service-cli.git",
-    "zkwasm-ts-server": "https://gitpkg.vercel.app/DelphinusLab/zkwasm-mini-rollup/ts?xgao/dev"
-  },
-      "scripts": {
-    "build": "npx tsc",
-    "sync-sanity": "npx ts-node src/sanity_sync.ts",
-    "sync-sanity:dev": "NODE_ENV=development npx ts-node src/sanity_sync.ts"
-  }
-  }
-  
+    "dependencies": {
+        "@sanity/client": "^6.24.3",
+        "@types/bn.js": "^5.1.5",
+        "@types/node": "^20.14.2",
+        "@types/sha256": "^0.2.2",
+        "delphinus-curves": "github:DelphinusLab/delphinus-curves#xgao",
+        "dotenv": "^16.3.1",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.4.5",
+        "zkwasm-minirollup-rpc": "github:DelphinusLab/zkWasm-minirollup-rpc#52bd36c3d6f31c152175016a1d5e3a910738a1ae",
+        "zkwasm-service-cli": "git+https://github.com/DelphinusLab/zkWasm-service-cli.git",
+        "zkwasm-ts-server": "https://gitpkg.vercel.app/DelphinusLab/zkwasm-mini-rollup/ts?main"
+    },
+    "scripts": {
+        "build": "npx tsc",
+        "sync-sanity": "npx ts-node src/sanity_sync.ts",
+        "sync-sanity:dev": "NODE_ENV=development npx ts-node src/sanity_sync.ts"
+    }
+}
