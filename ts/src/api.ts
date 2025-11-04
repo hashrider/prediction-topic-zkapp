@@ -103,8 +103,9 @@ export interface MarketData {
     startTime: string;
     endTime: string;
     resolutionTime: string;
-    yesLiquidity: string;
-    noLiquidity: string;
+    totalYesShares: string;
+    totalNoShares: string;
+    b: string;
     totalVolume: string;
     resolved: boolean;
     outcome: boolean | null;

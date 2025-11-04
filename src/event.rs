@@ -28,28 +28,28 @@ pub const EVENT_BET_UPDATE: u64 = 3;
 
 pub struct MarketEvent {
     // Virtual liquidity for AMM pricing
-    yes_liquidity: u64,
-    no_liquidity: u64,
+    total_yes_shares: u64,
+    total_no_shares: u64,
 }
 
 impl StorageData for MarketEvent {
     fn from_data(u64data: &mut std::slice::IterMut<u64>) -> Self {
         MarketEvent {
-            yes_liquidity: *u64data.next().unwrap(),
-            no_liquidity: *u64data.next().unwrap(),
+            total_yes_shares: *u64data.next().unwrap(),
+            total_no_shares: *u64data.next().unwrap(),
         }
     }
     fn to_data(&self, data: &mut Vec<u64>) {
-        data.push(self.yes_liquidity);
-        data.push(self.no_liquidity);
+        data.push(self.total_yes_shares);
+        data.push(self.total_no_shares);
     }
 }
 
 impl From<&MarketData> for MarketEvent {
     fn from(m: &MarketData) -> MarketEvent {
         MarketEvent {
-            yes_liquidity: m.yes_liquidity,
-            no_liquidity: m.no_liquidity,
+            total_yes_shares: m.total_yes_shares,
+            total_no_shares: m.total_no_shares,
         }
     }
 }
