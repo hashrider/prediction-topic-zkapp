@@ -61,6 +61,7 @@ pub struct DefaultMarketConfig {
     pub resolution_time: u64,
     pub initial_yes_liquidity: u64,
     pub initial_no_liquidity: u64,
+    pub lmsr_b: u64,
 }
 
 lazy_static::lazy_static! {
@@ -72,6 +73,7 @@ lazy_static::lazy_static! {
         resolution_time: 17280, // Resolution time same as end time
         initial_yes_liquidity: 1000000, // Initial YES liquidity for AMM
         initial_no_liquidity: 1000000,  // Initial NO liquidity for AMM
+        lmsr_b: 1000000,
     };
 }
 

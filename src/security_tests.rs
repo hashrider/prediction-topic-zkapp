@@ -415,4 +415,38 @@ mod market_safe_tests {
         let payout = market.calculate_payout(0, no_shares);
         assert_eq!(payout.unwrap(), 0);
     }
+
+    #[test]
+    fn test_lmsr_price_bounds() {
+        // simple config
+        let q_yes: u64 = 10_000;
+        let q_no:  u64 = 10_000;
+        let b: u64 = 5_000;
+
+        let p_yes = calculate_yes_price_lmsr(q_yes, q_no, b).unwrap();
+        let p_no  = calculate_no_price_lmsr(q_yes, q_no, b).unwrap();
+
+        assert!(p_yes <= PRICE_PRECISION);
+        assert!(p_no  <= PRICE_PRECISION);
+
+        // prices should roughly sum to ~1.0 in PRICE_PRECISION scale
+        let sum = p_yes + p_no;
+        assert!(sum > PRICE_PRECISION - 10); // allow small approx slack
+        assert!(sum < PRICE_PRECISION + 10);
+    }
+
+    #[test]
+    fn test_lmsr_buy_and_sell_quotes_nonzero() {
+        let q_yes: u64 = 1000;
+        let q_no:  u64 = 1000;
+        let b: u64 = 500;
+
+        // Buy 100 YES shares
+        let buy_quote = lmsr_buy_yes_quote(q_yes, q_no, b, 100).unwrap();
+        assert!(buy_quote > 0);
+
+        // Sell 100 YES shares
+        let sell_quote = lmsr_sell_yes_quote(q_yes + 100, q_no, b, 100).unwrap();
+        assert!(sell_quote > 0);
+    }
 } 
