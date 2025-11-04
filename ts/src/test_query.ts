@@ -179,26 +179,26 @@ async function main() {
     const noLiquidity = BigInt(market.noLiquidity);
     
     // Current prices
-    const prices = api.calculatePrices(yesLiquidity, noLiquidity);
+    const prices = api.calculatePrices(yesLiquidity, noLiquidity, BigInt(market.b));
     console.log(`  Current prices: YES=${(prices.yesPrice * 100).toFixed(2)}%, NO=${(prices.noPrice * 100).toFixed(2)}%`);
     
     // Expected shares for 1000 unit bet
     const betAmount = 1000;
-    const expectedYesShares = api.calculateShares(1, betAmount, yesLiquidity, noLiquidity);
-    const expectedNoShares = api.calculateShares(0, betAmount, yesLiquidity, noLiquidity);
+    const expectedYesShares = api.calculateShares(1, betAmount, yesLiquidity, noLiquidity, BigInt(market.b));
+    const expectedNoShares = api.calculateShares(0, betAmount, yesLiquidity, noLiquidity, BigInt(market.b));
     console.log(`  Expected shares for ${betAmount} units: YES=${expectedYesShares}, NO=${expectedNoShares}`);
     
     // Buy prices
-    const yesBuyPrice = api.getBuyPrice(1, betAmount, yesLiquidity, noLiquidity);
-    const noBuyPrice = api.getBuyPrice(0, betAmount, yesLiquidity, noLiquidity);
+    const yesBuyPrice = api.getBuyPrice(1, betAmount, yesLiquidity, noLiquidity, BigInt(market.b));
+    const noBuyPrice = api.getBuyPrice(0, betAmount, yesLiquidity, noLiquidity, BigInt(market.b));
     console.log(`  Buy prices: YES=${yesBuyPrice.toFixed(6)}, NO=${noBuyPrice.toFixed(6)}`);
     
     // Market impact
-    const yesImpact = api.calculateMarketImpact(1, betAmount, yesLiquidity, noLiquidity);
+    const yesImpact = api.calculateMarketImpact(1, betAmount, yesLiquidity, noLiquidity, BigInt(market.b));
     console.log(`  YES bet impact: ${(yesImpact.currentYesPrice * 100).toFixed(2)}% → ${(yesImpact.newYesPrice * 100).toFixed(2)}%`);
     
     // Slippage
-    const yesSlippage = api.calculateSlippage(1, betAmount, yesLiquidity, noLiquidity);
+    const yesSlippage = api.calculateSlippage(1, betAmount, yesLiquidity, noLiquidity, BigInt(market.b));
     console.log(`  YES bet slippage: ${yesSlippage.toFixed(4)}%`);
 
     // Test 10: Platform statistics (calculated from markets data)

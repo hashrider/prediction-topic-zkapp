@@ -73,6 +73,7 @@ async function main() {
         endTimeOffset,
         resolutionTimeOffset,
         initialLiquidity,
+        initialLiquidity,
         initialLiquidity
       );
       console.log("  Market created successfully!");
@@ -145,7 +146,7 @@ async function main() {
     // Calculate new prices
     const yesLiq = BigInt(updatedMarket.yesLiquidity);
     const noLiq = BigInt(updatedMarket.noLiquidity);
-    const prices = api.calculatePrices(yesLiq, noLiq);
+    const prices = api.calculatePrices(yesLiq, noLiq, BigInt(updatedMarket.yesLiquidity));
     console.log(`    Current prices: YES=${(prices.yesPrice * 100).toFixed(2)}%, NO=${(prices.noPrice * 100).toFixed(2)}%`);
     await delay(1000);
 

@@ -193,7 +193,8 @@ export class Player extends PlayerConvention {
         endTimeOffset: bigint,      // Offset from current counter
         resolutionTimeOffset: bigint, // Offset from current counter
         yesLiquidity: bigint,
-        noLiquidity: bigint
+        noLiquidity: bigint,
+        b: bigint
     ) {
         // Validate title length before creating market
         const titleValidation = validateMarketTitleLength(title);
@@ -211,7 +212,8 @@ export class Player extends PlayerConvention {
             endTimeOffset,
             resolutionTimeOffset,
             yesLiquidity,
-            noLiquidity
+            noLiquidity,
+            b
         ];
         
         let cmd = createCommand(nonce, BigInt(CREATE_MARKET), params);
@@ -550,7 +552,8 @@ export function buildCreateMarketTransaction(
     endTimeOffset: bigint,       // Offset from current counter
     resolutionTimeOffset: bigint, // Offset from current counter
     yesLiquidity: bigint,
-    noLiquidity: bigint
+    noLiquidity: bigint,
+    b: bigint
 ): bigint[] {
     // Validate title length before creating transaction
     const titleValidation = validateMarketTitleLength(title);
@@ -567,7 +570,8 @@ export function buildCreateMarketTransaction(
         endTimeOffset,
         resolutionTimeOffset,
         yesLiquidity,
-        noLiquidity
+        noLiquidity,
+        b
     ];
 }
 

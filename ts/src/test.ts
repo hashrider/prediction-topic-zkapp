@@ -1,6 +1,6 @@
 import { PrivateKey, bnToHexLe } from "delphinus-curves/src/altjubjub";
-import dotenv from 'dotenv';
-import { PlayerConvention, ZKWasmAppRpc, createCommand } from 'zkwasm-minirollup-rpc';
+import dotenv from "dotenv";
+import { PlayerConvention, ZKWasmAppRpc, createCommand } from "zkwasm-minirollup-rpc";
 import { LeHexBN } from "zkwasm-ts-server";
 import { PredictionMarketAPI } from './api.js';
 import { stringToU64Array } from './models.js';
@@ -28,7 +28,7 @@ class Player extends PlayerConvention {
 
     async sendTransactionWithCommand(cmd: BigUint64Array) {
         try {
-            let result = await this.rpc.sendTransaction(cmd, this.processingKey);
+            const result = await this.rpc.sendTransaction(cmd, this.processingKey);
             return result;
         } catch (e) {
             if (e instanceof Error) {
@@ -40,64 +40,40 @@ class Player extends PlayerConvention {
 
     async installPlayer() {
         try {
-            let cmd = createCommand(0n, BigInt(INSTALL_PLAYER), []);
+            const cmd = createCommand(0n, BigInt(INSTALL_PLAYER), []);
             return await this.sendTransactionWithCommand(cmd);
         } catch (e) {
             if (e instanceof Error && e.message === "PlayerAlreadyExists") {
                 console.log("Player already exists, skipping installation");
-                return null; // Not an error, just already exists
+                return null;
             }
-            throw e; // Re-throw other errors
+            throw e;
         }
     }
 
-    // Updated to include market_id
     async placeBet(marketId: bigint, betType: number, amount: bigint) {
-        let nonce = await this.getNonce();
-        let cmd = createCommand(nonce, BigInt(BET), [marketId, BigInt(betType), amount]);
+        const nonce = await this.getNonce();
+        const cmd = createCommand(nonce, BigInt(BET), [BigInt(marketId), BigInt(betType), amount]);
         return await this.sendTransactionWithCommand(cmd);
     }
 
-    // Updated to include market_id
-    async sellShares(marketId: bigint, sellType: number, shares: bigint) {
-        let nonce = await this.getNonce();
-        let cmd = createCommand(nonce, BigInt(SELL), [marketId, BigInt(sellType), shares]);
-        return await this.sendTransactionWithCommand(cmd);
-    }
-
-    // Updated to include market_id
     async claimWinnings(marketId: bigint) {
-        let nonce = await this.getNonce();
-        let cmd = createCommand(nonce, BigInt(CLAIM), [marketId]);
+        const nonce = await this.getNonce();
+        const cmd = createCommand(nonce, BigInt(CLAIM), [BigInt(marketId)]);
         return await this.sendTransactionWithCommand(cmd);
     }
 
     async withdrawFunds(amount: bigint, addressHigh: bigint, addressLow: bigint) {
-        let nonce = await this.getNonce();
-        let cmd = createCommand(nonce, BigInt(WITHDRAW), [0n, amount, addressHigh, addressLow]);
+        const nonce = await this.getNonce();
+        const cmd = createCommand(nonce, BigInt(WITHDRAW), [0n, amount, addressHigh, addressLow]);
         return await this.sendTransactionWithCommand(cmd);
     }
 
     async depositFunds(amount: bigint, targetPid1: bigint, targetPid2: bigint) {
-        let nonce = await this.getNonce();
-        let cmd = createCommand(nonce, BigInt(DEPOSIT), [targetPid1, targetPid2, 0n, amount]);
+        const nonce = await this.getNonce();
+        const cmd = createCommand(nonce, BigInt(DEPOSIT), [targetPid1, targetPid2, 0n, amount]);
         return await this.sendTransactionWithCommand(cmd);
     }
-
-    // Updated to include market_id
-    async resolveMarket(marketId: bigint, outcome: boolean) {
-        let nonce = await this.getNonce();
-        let cmd = createCommand(nonce, BigInt(RESOLVE), [marketId, outcome ? 1n : 0n]);
-        return await this.sendTransactionWithCommand(cmd);
-    }
-
-    // Updated to include market_id
-    async withdrawFees(marketId: bigint) {
-        let nonce = await this.getNonce();
-        let cmd = createCommand(nonce, BigInt(WITHDRAW_FEES), [marketId]);
-        return await this.sendTransactionWithCommand(cmd);
-    }
-
     // New function to create markets with relative time offsets
     async createMarket(
         title: string,
@@ -105,7 +81,8 @@ class Player extends PlayerConvention {
         endTimeOffset: bigint,      // Offset from current counter
         resolutionTimeOffset: bigint, // Offset from current counter
         yesLiquidity: bigint,
-        noLiquidity: bigint
+        noLiquidity: bigint,
+        b: bigint
     ) {
         let nonce = await this.getNonce();
         const titleU64Array = stringToU64Array(title);
@@ -117,18 +94,36 @@ class Player extends PlayerConvention {
             endTimeOffset,
             resolutionTimeOffset,
             yesLiquidity,
-            noLiquidity
+            noLiquidity,
+            b
         ];
         
         let cmd = createCommand(nonce, BigInt(CREATE_MARKET), params);
         return await this.sendTransactionWithCommand(cmd);
     }
+
+    async resolveMarket(marketId: bigint, outcome: boolean) {
+        const nonce = await this.getNonce();
+        const cmd = createCommand(nonce, BigInt(RESOLVE), [BigInt(marketId), outcome ? 1n : 0n]);
+        return await this.sendTransactionWithCommand(cmd);
+    }
+
+    async withdrawFees(marketId: bigint) {
+        const nonce = await this.getNonce();
+        const cmd = createCommand(nonce, BigInt(WITHDRAW_FEES), [BigInt(marketId)]);
+        return await this.sendTransactionWithCommand(cmd);
+    }
+
+    async sellShares(marketId: bigint, sellType: number, shares: bigint) {
+        const nonce = await this.getNonce();
+        const cmd = createCommand(nonce, BigInt(SELL), [BigInt(marketId), BigInt(sellType), shares]);
+        return await this.sendTransactionWithCommand(cmd);
+    }
 }
 
-// Helper function to log player and market state
+// Helper: log player + market state (updated to LMSR fields)
 async function logStateInfo(rpc: any, player: Player, playerName: string, stepDescription: string) {
     console.log(`\n=== ${stepDescription} - ${playerName} State ===`);
-    
     try {
         const playerDataResponse: any = await rpc.queryState(player.processingKey);
         const playerData = JSON.parse(playerDataResponse.data);
@@ -147,40 +142,42 @@ async function logStateInfo(rpc: any, player: Player, playerName: string, stepDe
     }
 }
 
-// Test AMM calculations
+// Lightweight AMM test using LMSR helpers
 function testAMMCalculations() {
-    console.log("=== Testing AMM Calculations ===");
-    
+    console.log("=== Testing LMSR Calculations ===");
+
     const api = new PredictionMarketAPI();
-    
-    // Initial liquidity
-    const initialYesLiquidity = 100000n;
-    const initialNoLiquidity = 100000n;
-    
-    console.log(`Initial liquidity - YES: ${initialYesLiquidity}, NO: ${initialNoLiquidity}`);
-    
-    // Test initial prices (should be 50/50)
-    const initialPrices = api.calculatePrices(initialYesLiquidity, initialNoLiquidity);
-    console.log(`Initial prices - YES: ${(initialPrices.yesPrice * 100).toFixed(2)}%, NO: ${(initialPrices.noPrice * 100).toFixed(2)}%`);
-    
-    // Test bet calculations
-    const betAmount = 10000;
-    
-    // Calculate YES bet
-    const yesShares = api.calculateShares(1, betAmount, initialYesLiquidity, initialNoLiquidity);
+
+    // Seed outstanding shares and b (depth). Typical safe start: b ≈ starting shares per outcome.
+    const qYes = 1_000_000n;
+    const qNo = 1_000_000n;
+    const b = 1_000_000n;
+
+    console.log(`Initial shares - YES: ${qYes}, NO: ${qNo}, b: ${b}`);
+
+    // Initial prices (should be ~0.5/0.5)
+    const initial = api.calculatePrices(qYes, qNo, b);
+    console.log(
+        `Initial prices - YES: ${(initial.yesPrice * 100).toFixed(2)}%, NO: ${(initial.noPrice * 100).toFixed(2)}%`
+    );
+
+    const betAmount = 10_000; // tokens
+
+    // Calculate expected YES shares for betAmount using LMSR + fees
+    const yesShares = api.calculateShares(1, betAmount, qYes, qNo, b);
     console.log(`\nBetting ${betAmount} on YES:`);
-    console.log(`Expected shares: ${yesShares}`);
-    
-    console.log("\n=== AMM Test Complete ===\n");
+    console.log(`Expected LMSR-minted YES shares: ${yesShares}`);
+
+    console.log("\n=== LMSR Test Complete ===\n");
 }
 
-async function testMultiMarketPrediction() {
-    console.log("=== Comprehensive Multi-Market Test with All Commands ===");
-    
+async function testPredictionMarket() {
+    console.log("=== Enhanced Prediction Market Test with Two Players (LMSR) ===");
+
     const api = new PredictionMarketAPI();
     const rpc = new ZKWasmAppRpc("http://localhost:3000");
-    
-    // Use environment variable for admin key - this must match the admin.pubkey file
+
+    // Admin key must match admin.pubkey
     const adminKey = process.env.SERVER_ADMIN_KEY;
     if (!adminKey) {
         throw new Error("SERVER_ADMIN_KEY environment variable is required");
@@ -190,51 +187,50 @@ async function testMultiMarketPrediction() {
     const player3Key = "111222333"; // Third player for more testing
     
     console.log("Admin key from env:", adminKey);
-    
+
     try {
-        // Create player instances
+        // Create players
         const admin = new Player(adminKey, rpc);
         const player1 = new Player(player1Key, rpc);
         const player2 = new Player(player2Key, rpc);
         const player3 = new Player(player3Key, rpc);
-        
-        // Get player PIDs for deposits
-        let player1Pkey = PrivateKey.fromString(player1.processingKey);
-        let player1Pubkey = player1Pkey.publicKey.key.x.v;
-        let player1LeHexBN = new LeHexBN(bnToHexLe(player1Pubkey));
-        let player1PkeyArray = player1LeHexBN.toU64Array();
-        
-        let player2Pkey = PrivateKey.fromString(player2.processingKey);
-        let player2Pubkey = player2Pkey.publicKey.key.x.v;
-        let player2LeHexBN = new LeHexBN(bnToHexLe(player2Pubkey));
-        let player2PkeyArray = player2LeHexBN.toU64Array();
 
-        let player3Pkey = PrivateKey.fromString(player3.processingKey);
-        let player3Pubkey = player3Pkey.publicKey.key.x.v;
-        let player3LeHexBN = new LeHexBN(bnToHexLe(player3Pubkey));
-        let player3PkeyArray = player3LeHexBN.toU64Array();
-        
-        console.log("Player1 PID:", player1PkeyArray);
-        console.log("Player2 PID:", player2PkeyArray);
-        console.log("Player3 PID:", player3PkeyArray);
-        
-        // Step 1: Install all players (INSTALL_PLAYER command)
-        console.log("\n=== STEP 1: Installing Players (INSTALL_PLAYER) ===");
-        
+        // Resolve PIDs for deposits
+        const p1pk = PrivateKey.fromString(player1.processingKey);
+        const p1x = p1pk.publicKey.key.x.v;
+        const p1hex = new LeHexBN(bnToHexLe(p1x));
+        const p1Arr = p1hex.toU64Array();
+
+        const p2pk = PrivateKey.fromString(player2.processingKey);
+        const p2x = p2pk.publicKey.key.x.v;
+        const p2hex = new LeHexBN(bnToHexLe(p2x));
+        const p2Arr = p2hex.toU64Array();
+
+        const p3pk = PrivateKey.fromString(player3.processingKey);
+        const p3x = p3pk.publicKey.key.x.v;
+        const p3hex = new LeHexBN(bnToHexLe(p3x));
+        const p3Arr = p3hex.toU64Array();
+
+        console.log("Player1 PID:", p1Arr);
+        console.log("Player2 PID:", p2Arr);
+        console.log("Player3 PID:", p3Arr);
+
+        // STEP 1: install players
+        console.log("\n=== STEP 1: Installing Players ===");
         try {
             await admin.installPlayer();
             console.log("Admin installed successfully");
         } catch (e) {
-            console.log("Admin already exists or error:", e);
+            if (e instanceof Error && e.message === "PlayerAlreadyExists") console.log("Admin already exists");
+            else throw e;
         }
-        
         try {
             await player1.installPlayer();
             console.log("Player1 installed successfully");
         } catch (e) {
-            console.log("Player1 already exists or error:", e);
+            if (e instanceof Error && e.message === "PlayerAlreadyExists") console.log("Player1 already exists");
+            else throw e;
         }
-        
         try {
             await player2.installPlayer();
             console.log("Player2 installed successfully");
@@ -262,7 +258,8 @@ async function testMultiMarketPrediction() {
             100000n,  // End after 50 counter ticks
             100000n,  // Resolve after 50 counter ticks
             1000000n, // 50K initial YES liquidity
-            1000000n  // 50K initial NO liquidity
+            1000000n,  // 50K initial NO liquidity,
+            1000000n
         );
         
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -275,7 +272,8 @@ async function testMultiMarketPrediction() {
             50000n,  // End after 50 counter ticks
             50000n,  // Resolve after 50 counter ticks
             1000000n, // 30K initial YES liquidity
-            1000000n  // 70K initial NO liquidity (biased market)
+            1000000n,  // 70K initial NO liquidity (biased market),
+            1000000n
         );
         
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -288,7 +286,8 @@ async function testMultiMarketPrediction() {
             30000n,  // End after 50 counter ticks
             30000n,  // Resolve after 50 counter ticks
             1000000n, // 25K initial YES liquidity
-            1000000n  // 25K initial NO liquidity
+            1000000n,  // 25K initial NO liquidity,
+            1000000n
         );
 
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -296,13 +295,13 @@ async function testMultiMarketPrediction() {
         // Step 3: Admin deposits funds for all players (DEPOSIT command)
         console.log("\n=== STEP 3: Admin Deposits Funds (DEPOSIT) ===");
         
-        await admin.depositFunds(10000n, player1PkeyArray[1], player1PkeyArray[2]);
+        await admin.depositFunds(10000n, p1Arr[1], p1Arr[2]);
         console.log("Deposited 10000 for Player1");
         
-        await admin.depositFunds(8000n, player2PkeyArray[1], player2PkeyArray[2]);
+        await admin.depositFunds(8000n, p2Arr[1], p2Arr[2]);
         console.log("Deposited 8000 for Player2");
 
-        await admin.depositFunds(12000n, player3PkeyArray[1], player3PkeyArray[2]);
+        await admin.depositFunds(12000n, p3Arr[1], p3Arr[2]);
         console.log("Deposited 12000 for Player3");
         
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -529,21 +528,17 @@ async function testMultiMarketPrediction() {
     } catch (error) {
         console.error("Test failed:", error);
         if (error instanceof Error) {
-            console.error("Error message:", error.message);
+            console.error("Error message:", error?.message);
         }
     }
 }
 
 async function runExamples() {
-    console.log("Running comprehensive multi-market prediction test...\n");
-    
+    console.log("Running prediction market examples...\n");
     try {
-        // Test AMM calculations first
         testAMMCalculations();
-        
-        // Then test all commands
-        await testMultiMarketPrediction();
-        
+        await testPredictionMarket();
+        console.log("\n" + "=".repeat(50));
     } catch (error) {
         console.error("Examples failed:", error);
     }
