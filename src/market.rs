@@ -304,7 +304,9 @@ impl MarketData {
         }
 
         // AMM balance bookkeeping
-        self.pool_balance = safe_add(self.pool_balance, bet_amount)?;
+        // - only NET tokens fund the pool
+        // - fees go to the fee vault (`total_fees_collected`)
+        self.pool_balance = safe_add(self.pool_balance, net_tokens)?;
         self.total_volume = safe_add(self.total_volume, bet_amount)?;
         self.total_fees_collected = safe_add(self.total_fees_collected, fee_tokens)?;
 
@@ -343,13 +345,12 @@ impl MarketData {
             self.total_no_shares = safe_sub(self.total_no_shares, shares_to_sell)?;
         }
 
-        // Pay out from pool balance
+        // Pay the trader only the net payout from the pool;
+        // protocol fee is *not* paid out — it’s retained
         self.pool_balance = safe_sub(self.pool_balance, payout_tokens)?;
-
-        // Collect fee
         self.total_fees_collected = safe_add(self.total_fees_collected, fee_tokens)?;
 
-        // Add to volume accounting (payout+fee is economic trade size)
+        // Record economic size: sell-side trade value = payout + fee
         let tx_value = safe_add(payout_tokens, fee_tokens)?;
         self.total_volume = safe_add(self.total_volume, tx_value)?;
 
@@ -408,6 +409,16 @@ impl MarketData {
     //         safe_div(self.prize_pool, total_shares)
     //     }
     // }
+
+
+    pub fn withdraw_fees(&mut self, amount: u64) -> Result<u64, u32> {
+        if amount == 0 || amount > self.total_fees_collected {
+            return Err(ERROR_INVALID_BET_AMOUNT);
+        }
+        self.total_fees_collected = safe_sub(self.total_fees_collected, amount)?;
+        // no impact on pool_balance; fees are separate by design
+        Ok(amount)
+    }
 }
 
 impl StorageData for MarketData {
@@ -423,12 +434,11 @@ impl StorageData for MarketData {
             start_time: *u64data.next().unwrap(),
             end_time: *u64data.next().unwrap(),
             resolution_time: *u64data.next().unwrap(),
-            yes_liquidity: *u64data.next().unwrap(),
-            no_liquidity: *u64data.next().unwrap(),
-            prize_pool: *u64data.next().unwrap(),
-            total_volume: *u64data.next().unwrap(),
             total_yes_shares: *u64data.next().unwrap(),
             total_no_shares: *u64data.next().unwrap(),
+            b: *u64data.next().unwrap(),
+            pool_balance: *u64data.next().unwrap(),
+            total_volume: *u64data.next().unwrap(),
             resolved: *u64data.next().unwrap() != 0,
             outcome: {
                 let outcome_val = *u64data.next().unwrap();
@@ -446,12 +456,11 @@ impl StorageData for MarketData {
         data.push(self.start_time);
         data.push(self.end_time);
         data.push(self.resolution_time);
-        data.push(self.yes_liquidity);
-        data.push(self.no_liquidity);
-        data.push(self.prize_pool);
-        data.push(self.total_volume);
         data.push(self.total_yes_shares);
         data.push(self.total_no_shares);
+        data.push(self.b);
+        data.push(self.pool_balance);
+        data.push(self.total_volume);
         data.push(if self.resolved { 1 } else { 0 });
         data.push(match self.outcome {
             None => 0,

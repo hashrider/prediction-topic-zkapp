@@ -147,6 +147,7 @@ export interface MarketData {
     totalVolume: string;
     totalYesShares: string;
     totalNoShares: string;
+    b: string;
     resolved: boolean;
     outcome: boolean | null;
     totalFeesCollected: string;

@@ -33,8 +33,8 @@ pub const LIQUIDITY_HISTORY_INFO: u64 = 2;
 
 pub struct MarketEvent {
     // Virtual liquidity for AMM pricing
-    yes_liquidity: u64,
-    no_liquidity: u64,
+    total_yes_shares: u64,
+    total_no_shares: u64,
     // Market status
     resolved: u64, // 0 = false, 1 = true
     outcome: u64,  // 0 = NO won, 1 = YES won, meaningless if not resolved
@@ -43,15 +43,15 @@ pub struct MarketEvent {
 impl StorageData for MarketEvent {
     fn from_data(u64data: &mut std::slice::IterMut<u64>) -> Self {
         MarketEvent {
-            yes_liquidity: *u64data.next().unwrap(),
-            no_liquidity: *u64data.next().unwrap(),
+            total_yes_shares: *u64data.next().unwrap(),
+            total_no_shares: *u64data.next().unwrap(),
             resolved: *u64data.next().unwrap(),
             outcome: *u64data.next().unwrap(),
         }
     }
     fn to_data(&self, data: &mut Vec<u64>) {
-        data.push(self.yes_liquidity);
-        data.push(self.no_liquidity);
+        data.push(self.total_yes_shares);
+        data.push(self.total_no_shares);
         data.push(self.resolved);
         data.push(self.outcome);
     }
@@ -60,8 +60,8 @@ impl StorageData for MarketEvent {
 impl From<&MarketData> for MarketEvent {
     fn from(m: &MarketData) -> MarketEvent {
         MarketEvent {
-            yes_liquidity: m.yes_liquidity,
-            no_liquidity: m.no_liquidity,
+            total_yes_shares: m.total_yes_shares,
+            total_no_shares: m.total_no_shares,
             resolved: if m.resolved { 1 } else { 0 },
             outcome: if m.outcome == Some(true) { 1 } else { 0 },
         }
@@ -73,8 +73,8 @@ impl From<&MarketData> for MarketEvent {
 pub struct LiquidityHistoryEntry {
     pub market_id: u64,
     pub counter: u64,
-    pub yes_liquidity: u64,
-    pub no_liquidity: u64,
+    pub total_yes_shares: u64,
+    pub total_no_shares: u64,
 }
 
 impl StorageData for LiquidityHistoryEntry {
@@ -82,15 +82,15 @@ impl StorageData for LiquidityHistoryEntry {
         LiquidityHistoryEntry {
             market_id: *u64data.next().unwrap(),
             counter: *u64data.next().unwrap(),
-            yes_liquidity: *u64data.next().unwrap(),
-            no_liquidity: *u64data.next().unwrap(),
+            total_yes_shares: *u64data.next().unwrap(),
+            total_no_shares: *u64data.next().unwrap(),
         }
     }
     fn to_data(&self, data: &mut Vec<u64>) {
         data.push(self.market_id);
         data.push(self.counter);
-        data.push(self.yes_liquidity);
-        data.push(self.no_liquidity);
+        data.push(self.total_yes_shares);
+        data.push(self.total_no_shares);
     }
 }
 
@@ -113,12 +113,12 @@ pub fn emit_market_indexed_object(market: &MarketData, market_id: u64) {
 }
 
 // Helper function to emit liquidity history - simplified to only track liquidity snapshots
-pub fn emit_liquidity_history(market_id: u64, counter: u64, yes_liquidity: u64, no_liquidity: u64) {
+pub fn emit_liquidity_history(market_id: u64, counter: u64, total_yes_shares: u64, total_no_shares: u64) {
     let history_entry = LiquidityHistoryEntry {
         market_id,
         counter,
-        yes_liquidity,
-        no_liquidity,
+        total_yes_shares,
+        total_no_shares,
     };
     
     let mut data = Vec::new();
