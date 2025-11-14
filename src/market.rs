@@ -1,7 +1,6 @@
 use serde::Serialize;
 use zkwasm_rest_abi::StorageData;
 use zkwasm_rest_convention::IndexedObject;
-use crate::config::PRICE_PRECISION;
 use crate::error::*;
 use crate::math_safe::*;
 
@@ -37,12 +36,13 @@ impl MarketData {
         end_time: u64, 
         resolution_time: u64,
         initial_yes_liquidity: u64,
-        initial_no_liquidity: u64
+        initial_no_liquidity: u64,
+        b: u64
     ) -> Result<Self, u32> {
         // 验证标题长度（命令长度限制）
-        // CreateMarket命令格式：[cmd_type, title_data..., start, end, resolution, yes_liq, no_liq]
-        // 总长度必须 < 16，所以 title_len < 10，最大值为9 (16 - 1 - 5 = 10)
-        if title.len() > 9 {
+        // CreateMarket命令格式：[cmd_type, title_data..., start, end, resolution, yes_liq, no_liq, b]
+        // 总长度必须 < 16，所以 title_len < 9，最大值为8 (16 - 1 - 6 = 9)
+        if title.len() > 8 {
             return Err(crate::error::ERROR_INVALID_MARKET_TITLE);
         }
         
@@ -58,6 +58,9 @@ impl MarketData {
         validate_liquidity(initial_yes_liquidity)?;
         validate_liquidity(initial_no_liquidity)?;
         
+        // 验证LMSR参数b
+        validate_b(b)?;
+        
         Ok(MarketData {
             title,
             start_time,
@@ -69,7 +72,7 @@ impl MarketData {
             total_yes_shares: initial_yes_liquidity,
             total_no_shares:  initial_no_liquidity,
 
-            b: (initial_yes_liquidity + initial_no_liquidity) / 2,
+            b: b,
 
             pool_balance: 0,
             total_volume: 0,

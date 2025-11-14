@@ -295,7 +295,8 @@ mod market_safe_tests {
             1000,
             1000,
             1_000_000, // initial_yes_liquidity
-            1_000_000  // initial_no_liquidity
+            1_000_000, // initial_no_liquidity
+            1_000_000  // b
         ).unwrap()
     }
 
@@ -308,7 +309,8 @@ mod market_safe_tests {
             1000,
             1000,
             1_000_000, // initial_yes_liquidity
-            1_000_000  // initial_no_liquidity
+            1_000_000, // initial_no_liquidity
+            1_000_000  // b
         );
         assert!(market.is_ok());
     }
@@ -430,7 +432,8 @@ mod market_safe_tests {
             1000,
             1000,
             500_000,  // Low YES liquidity
-            2_000_000 // High NO liquidity  
+            2_000_000, // High NO liquidity
+            1_250_000  // b (average of initial shares)
         ).unwrap();
         
         // YES should be more expensive due to lower liquidity

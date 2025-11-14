@@ -26,6 +26,7 @@ interface SanityMarket {
   resolve: number;
   yes: number;
   no: number;
+  b: number;
 }
 
 class SanitySyncService {
@@ -138,7 +139,8 @@ class SanitySyncService {
         BigInt(sanityMarket.end),
         BigInt(sanityMarket.resolve),
         BigInt(sanityMarket.yes),
-        BigInt(sanityMarket.no)
+        BigInt(sanityMarket.no),
+        BigInt(sanityMarket.b)
       );
       
       console.log(`✅ Successfully created market ${sanityMarket.id}`);
