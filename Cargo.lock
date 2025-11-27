@@ -372,3 +372,8 @@ dependencies = [
  "primitive-types",
  "wasm-bindgen",
 ]
+
+[[patch.unused]]
+name = "time"
+version = "0.3.44"
+source = "git+https://github.com/time-rs/time?tag=v0.3.44#04c0ef283828e25a0c7fc270f28c053ceb26afcf"

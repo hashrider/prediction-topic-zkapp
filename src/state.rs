@@ -201,18 +201,19 @@ impl Transaction {
             enforce(params.len() == 2, "withdraw_fees needs 2 params");
             Command::Activity(Activity::WithdrawFees(params[1]))
         } else if command == CREATE_MARKET {
-            enforce(params.len() >= 5, "create_market needs at least 5 params");
-            // Calculate title length: total_params - 5 (other params) = title_len
-            // params = [title_data..., start_time, end_time, resolution_time, yes_liquidity, no_liquidity]
-            let title_len = params.len() - 5;
-            enforce(title_len <= 9, "create_market title too long");
+            enforce(params.len() >= 6, "create_market needs at least 6 params");
+            // Calculate title length: total_params - 6 (other params) = title_len
+            // params = [title_data..., start_time, end_time, resolution_time, yes_liquidity, no_liquidity, b]
+            let title_len = params.len() - 6;
+            enforce(title_len <= 8, "create_market title too long");
             let title_u64_vec = params[0..title_len].to_vec();
             let start_time = params[title_len];
             let end_time = params[title_len+1];
             let resolution_time = params[title_len+2];
             let yes_liquidity = params[title_len+3];
             let no_liquidity = params[title_len+4];
-            Command::Activity(Activity::CreateMarket(title_u64_vec, start_time, end_time, resolution_time, yes_liquidity, no_liquidity))
+            let b = params[title_len+5];
+            Command::Activity(Activity::CreateMarket(title_u64_vec, start_time, end_time, resolution_time, yes_liquidity, no_liquidity, b))
         } else if command == INSTALL_PLAYER {
             Command::InstallPlayer
         } else {
@@ -253,15 +254,15 @@ impl Transaction {
             (new_counter, market_ids)
         }; // global_state is dropped here
         
-        // Emit liquidity history for each market at this counter
+        // Emit shares history for each market at this counter
         // Note: Market IndexedObject events are emitted directly during operations (bet, sell, resolve)
         for market_id in market_ids {
             if let Some(market) = MarketManager::get_market(market_id) {
                 emit_liquidity_history(
                     market_id,
                     new_counter,
-                    market.yes_liquidity,
-                    market.no_liquidity
+                    market.total_yes_shares,
+                    market.total_no_shares
                 );
             }
         }
@@ -301,7 +302,7 @@ impl Transaction {
                 if let Activity::WithdrawFees(_) = cmd {
                     unsafe { require(*pkey == *ADMIN_PUBKEY) };
                 }
-                if let Activity::CreateMarket(_, _, _, _, _, _) = cmd {
+                if let Activity::CreateMarket(_, _, _, _, _, _, _) = cmd {
                     unsafe { require(*pkey == *ADMIN_PUBKEY) };
                 }
                 cmd.handle(&pid, self.nonce, rand, counter)
@@ -366,7 +367,8 @@ impl MarketManager {
         end_time: u64, 
         resolution_time: u64,
         initial_yes_liquidity: u64,
-        initial_no_liquidity: u64
+        initial_no_liquidity: u64,
+        b: u64
     ) -> Result<u64, u32> {
         let market = MarketData::new_with_title_u64_and_liquidity(
             title_u64_vec, 
@@ -374,7 +376,8 @@ impl MarketManager {
             end_time, 
             resolution_time,
             initial_yes_liquidity,
-            initial_no_liquidity
+            initial_no_liquidity,
+            b
         )?;
         
         let market_id = {

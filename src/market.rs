@@ -1,7 +1,6 @@
 use serde::Serialize;
 use zkwasm_rest_abi::StorageData;
 use zkwasm_rest_convention::IndexedObject;
-use crate::config::PRICE_PRECISION;
 use crate::error::*;
 use crate::math_safe::*;
 
@@ -12,14 +11,19 @@ pub struct MarketData {
     pub start_time: u64,
     pub end_time: u64,
     pub resolution_time: u64,
-    // AMM virtual liquidity (for pricing only)
-    pub yes_liquidity: u64,
-    pub no_liquidity: u64,
-    // Actual prize pool from user bets
-    pub prize_pool: u64,
+    // LMSR state = outstanding shares
+    pub total_yes_shares: u64,
+    pub total_no_shares: u64,
+
+    // LMSR liquidity parameter b (market depth)
+    pub b: u64,
+
+    // Collateral in the AMM bank
+    pub pool_balance: u64,
+
+    // Volume stats
     pub total_volume: u64,
-    pub total_yes_shares: u64,  // Total YES shares issued
-    pub total_no_shares: u64,   // Total NO shares issued
+
     pub resolved: bool,
     pub outcome: Option<bool>, // None = unresolved, Some(true) = Yes wins, Some(false) = No wins
     pub total_fees_collected: u64,
@@ -32,12 +36,13 @@ impl MarketData {
         end_time: u64, 
         resolution_time: u64,
         initial_yes_liquidity: u64,
-        initial_no_liquidity: u64
+        initial_no_liquidity: u64,
+        b: u64
     ) -> Result<Self, u32> {
         // 验证标题长度（命令长度限制）
-        // CreateMarket命令格式：[cmd_type, title_data..., start, end, resolution, yes_liq, no_liq]
-        // 总长度必须 < 16，所以 title_len < 10，最大值为9 (16 - 1 - 5 = 10)
-        if title.len() > 9 {
+        // CreateMarket命令格式：[cmd_type, title_data..., start, end, resolution, yes_liq, no_liq, b]
+        // 总长度必须 < 16，所以 title_len < 8，最大值为7 (16 - 1 - 6 = 9)
+        if title.len() > 8 {
             return Err(crate::error::ERROR_INVALID_MARKET_TITLE);
         }
         
@@ -53,19 +58,25 @@ impl MarketData {
         validate_liquidity(initial_yes_liquidity)?;
         validate_liquidity(initial_no_liquidity)?;
         
+        // 验证LMSR参数b
+        validate_b(b)?;
+        
         Ok(MarketData {
             title,
             start_time,
             end_time,
             resolution_time,
             // Virtual liquidity for AMM pricing
-            yes_liquidity: initial_yes_liquidity,
-            no_liquidity: initial_no_liquidity,
-            // Real money tracking
-            prize_pool: 0,
+
+
+            total_yes_shares: initial_yes_liquidity,
+            total_no_shares:  initial_no_liquidity,
+
+            b: b,
+
+            pool_balance: 0,
             total_volume: 0,
-            total_yes_shares: 0,
-            total_no_shares: 0,
+
             resolved: false,
             outcome: None,
             total_fees_collected: 0,
@@ -120,22 +131,24 @@ impl MarketData {
         current_time >= self.resolution_time && !self.resolved
     }
 
-    // 安全的 YES 价格计算
+    // LMSR YES price scaled to PRICE_PRECISION
     pub fn get_yes_price(&self) -> Result<u64, u32> {
-        let total_liquidity = safe_add(self.yes_liquidity, self.no_liquidity)?;
-        if total_liquidity == 0 {
-            return Ok(PRICE_PRECISION / 2); // 50% if no liquidity
-        }
-        calculate_price_safe(self.no_liquidity, total_liquidity)
+        // calculate_yes_price_lmsr returns FP_SCALE=1e6 fixed point,
+        // which matches PRICE_PRECISION (1e6), so we can pass it through.
+        calculate_yes_price_lmsr(
+            self.total_yes_shares,
+            self.total_no_shares,
+            self.b
+        )
     }
 
-    // 安全的 NO 价格计算
+    // LMSR NO price scaled to PRICE_PRECISION
     pub fn get_no_price(&self) -> Result<u64, u32> {
-        let total_liquidity = safe_add(self.yes_liquidity, self.no_liquidity)?;
-        if total_liquidity == 0 {
-            return Ok(PRICE_PRECISION / 2); // 50% if no liquidity
-        }
-        calculate_price_safe(self.yes_liquidity, total_liquidity)
+        calculate_no_price_lmsr(
+            self.total_yes_shares,
+            self.total_no_shares,
+            self.b
+        )
     }
 
     // 验证投注类型的辅助函数
@@ -147,81 +160,98 @@ impl MarketData {
         }
     }
 
-    // 统一的份额计算函数（bet_type: 1=YES, 0=NO）
+    // New: compute how many shares we mint for the user if they spend `bet_amount`
+    // bet_type: 1 = buy YES, 0 = buy NO
+    // Returns "delta_shares" to mint.
+    //
+    // Strategy:
+    //   1. compute fee and net_amount
+    //   2. binary search Δ such that lmsr_buy_*_quote(...) ~= net_amount
     pub fn calculate_shares(&self, bet_type: u64, bet_amount: u64) -> Result<u64, u32> {
         validate_bet_amount(bet_amount)?;
+
+        let fee = calculate_fee_safe(bet_amount)?;
+        let net_amount = safe_sub(bet_amount, fee)?;
+
         let is_yes_bet = Self::validate_bet_type(bet_type)?;
-        
-        let net_amount = calculate_net_amount_safe(bet_amount)?;
-        
-        // 安全的 AMM 计算
-        let k = calculate_k_safe(self.yes_liquidity, self.no_liquidity)?;
-        
-        let (new_yes_liquidity, new_no_liquidity, original_liquidity) = if is_yes_bet {
-            let new_no = safe_add(self.no_liquidity, net_amount)?;
-            let new_yes = calculate_new_liquidity_safe(k, new_no)?;
-            (new_yes, new_no, self.yes_liquidity)
-        } else {
-            let new_yes = safe_add(self.yes_liquidity, net_amount)?;
-            let new_no = calculate_new_liquidity_safe(k, new_yes)?;
-            (new_yes, new_no, self.no_liquidity)
-        };
-        
-        if original_liquidity >= if is_yes_bet { new_yes_liquidity } else { new_no_liquidity } {
-            let shares = safe_sub(original_liquidity, if is_yes_bet { new_yes_liquidity } else { new_no_liquidity })?;
-            validate_shares(shares)?;
-            Ok(shares)
-        } else {
-            Ok(0)
+
+        // binary search Δ in [0, MAX_SHARES] for monotonic cost
+        let mut lo: u64 = 0;
+        let mut hi: u64 = MAX_SHARES; // cap
+
+        while lo < hi {
+            let mid = lo + (hi - lo + 1) / 2;
+            let quote_res = match if is_yes_bet {
+                lmsr_buy_yes_quote(self.total_yes_shares, self.total_no_shares, self.b, mid)
+            } else {
+                lmsr_buy_no_quote(self.total_yes_shares, self.total_no_shares, self.b, mid)
+            } {
+                Ok(quote) => quote,
+                Err(_) => {
+                    // If overflow/error, try smaller value
+                    hi = mid - 1;
+                    continue;
+                }
+            };
+
+            // quote_res is in fixed point 1e6. We compare against net_amount (u64 tokens).
+            // We assume "1 token" == "1 unit in quote_res / 1e6".
+            // So convert quote_res down:
+            let quote_tokens = (quote_res / 1_000_000u128) as u64;
+
+            if quote_tokens <= net_amount {
+                lo = mid;
+            } else {
+                hi = mid - 1;
+            }
         }
+        
+        // If we couldn't find any shares (lo == 0), it might be because net_amount is too small
+        // or the quote calculation failed. Check if we can buy at least 1 share.
+        if lo == 0 {
+            // Try to buy 1 share to see if it's affordable
+            let quote_res = if is_yes_bet {
+                lmsr_buy_yes_quote(self.total_yes_shares, self.total_no_shares, self.b, 1)
+            } else {
+                lmsr_buy_no_quote(self.total_yes_shares, self.total_no_shares, self.b, 1)
+            }?;
+            let quote_tokens = (quote_res / 1_000_000u128) as u64;
+            if quote_tokens > net_amount {
+                return Err(ERROR_INVALID_BET_AMOUNT);
+            }
+            lo = 1;
+        }
+        
+        validate_shares(lo)?;
+        Ok(lo)
     }
 
 
 
-    // 统一的卖出份额计算（返回净收益和费用）
+    // LMSR sell preview.
+    // Returns (net_payout_tokens, fee_tokens)
+    // sell_type: 1 = sell YES shares, 0 = sell NO shares
     pub fn calculate_sell_details(&self, sell_type: u64, shares_to_sell: u64) -> Result<(u64, u64), u32> {
         validate_shares(shares_to_sell)?;
+
         let is_yes_sell = Self::validate_bet_type(sell_type)?;
-        
-        let total_shares = if is_yes_sell {
-            self.total_yes_shares
+
+        // gross quote from LMSR (fixed point 1e6)
+        let gross_quote_fp = if is_yes_sell {
+            lmsr_sell_yes_quote(self.total_yes_shares, self.total_no_shares, self.b, shares_to_sell)?
         } else {
-            self.total_no_shares
+            lmsr_sell_no_quote(self.total_yes_shares, self.total_no_shares, self.b, shares_to_sell)?
         };
-        
-        if total_shares == 0 {
+
+        // convert to whole tokens (floor)
+        let gross_tokens: u64 = (gross_quote_fp / 1_000_000u128) as u64;
+
+        if gross_tokens == 0 {
             return Ok((0, 0));
         }
-        
-        // 安全的 AMM 计算
-        let k = calculate_k_safe(self.yes_liquidity, self.no_liquidity)?;
-        let (new_yes_liquidity, new_no_liquidity) = if is_yes_sell {
-            let new_yes = safe_add(self.yes_liquidity, shares_to_sell)?;
-            let new_no = calculate_new_liquidity_safe(k, new_yes)?;
-            (new_yes, new_no)
-        } else {
-            let new_no = safe_add(self.no_liquidity, shares_to_sell)?;
-            let new_yes = calculate_new_liquidity_safe(k, new_no)?;
-            (new_yes, new_no)
-        };
-        
-        let gross_amount = if is_yes_sell {
-            if self.no_liquidity >= new_no_liquidity {
-                safe_sub(self.no_liquidity, new_no_liquidity)?
-            } else {
-                return Ok((0, 0));
-            }
-        } else {
-            if self.yes_liquidity >= new_yes_liquidity {
-                safe_sub(self.yes_liquidity, new_yes_liquidity)?
-            } else {
-                return Ok((0, 0));
-            }
-        };
-        
-        let fee = calculate_fee_safe(gross_amount)?;
-        let net_payout = safe_sub(gross_amount, fee)?;
-        
+
+        let fee = calculate_fee_safe(gross_tokens)?;
+        let net_payout = safe_sub(gross_tokens, fee)?;
         Ok((net_payout, fee))
     }
 
@@ -281,85 +311,82 @@ impl MarketData {
     //     }
     // }
 
-    // 统一的投注函数（bet_type: 1=YES, 0=NO）
     pub fn place_bet(&mut self, bet_type: u64, bet_amount: u64) -> Result<u64, u32> {
         validate_bet_amount(bet_amount)?;
 
+        // how many shares will we mint?
         let shares = self.calculate_shares(bet_type, bet_amount)?;
         if shares == 0 {
             return Err(ERROR_INVALID_BET_AMOUNT);
         }
 
-        let fee = calculate_fee_safe(bet_amount)?;
-        let net_amount = safe_sub(bet_amount, fee)?;
+        // recompute fee / net (tokens)
+        let fee_tokens = calculate_fee_safe(bet_amount)?;
+        let net_tokens = safe_sub(bet_amount, fee_tokens)?;
+
         let is_yes_bet = bet_type == 1;
-        
-        // 安全更新 AMM 流动性
-        let k = calculate_k_safe(self.yes_liquidity, self.no_liquidity)?;
+
+        // Mint shares into outstanding supply
         if is_yes_bet {
-            self.no_liquidity = safe_add(self.no_liquidity, net_amount)?;
-            self.yes_liquidity = calculate_new_liquidity_safe(k, self.no_liquidity)?;
             self.total_yes_shares = safe_add(self.total_yes_shares, shares)?;
         } else {
-            self.yes_liquidity = safe_add(self.yes_liquidity, net_amount)?;
-            self.no_liquidity = calculate_new_liquidity_safe(k, self.yes_liquidity)?;
             self.total_no_shares = safe_add(self.total_no_shares, shares)?;
         }
-        
-        // 安全更新状态
-        self.prize_pool = safe_add(self.prize_pool, net_amount)?;
+
+        // AMM balance bookkeeping
+        // - only NET tokens fund the pool
+        // - fees go to the fee vault (`total_fees_collected`)
+        self.pool_balance = safe_add(self.pool_balance, net_tokens)?;
         self.total_volume = safe_add(self.total_volume, bet_amount)?;
-        self.total_fees_collected = safe_add(self.total_fees_collected, fee)?;
-        
+        self.total_fees_collected = safe_add(self.total_fees_collected, fee_tokens)?;
+
+        // NOTE: net_tokens goes to bankroll "backing" payouts, fee_tokens can later be skimmed.
+
         Ok(shares)
     }
 
 
 
-    // 统一的卖出函数（sell_type: 1=YES, 0=NO）
     pub fn sell_shares(&mut self, sell_type: u64, shares_to_sell: u64) -> Result<u64, u32> {
-        validate_shares(shares_to_sell)?;
-
-        let (total_shares, is_yes_sell) = if sell_type == 1 {
+        // Check balance
+        let (current_shares, is_yes_sell) = if sell_type == 1 {
             (self.total_yes_shares, true)
         } else {
             (self.total_no_shares, false)
         };
 
-        if shares_to_sell > total_shares {
+        if shares_to_sell > current_shares {
             return Err(ERROR_INSUFFICIENT_BALANCE);
         }
 
-        // 使用优化的计算函数，一次性计算净收益和费用
-        let (payout, fee) = self.calculate_sell_details(sell_type, shares_to_sell)?;
-        if payout == 0 {
+        // Get net payout + fee in tokens
+        let (payout_tokens, fee_tokens) = self.calculate_sell_details(sell_type, shares_to_sell)?;
+        if payout_tokens == 0 {
             return Err(ERROR_INVALID_BET_AMOUNT);
         }
 
-        if payout > self.prize_pool {
+        // AMM must have enough collateral
+        if payout_tokens > self.pool_balance {
             return Err(ERROR_INSUFFICIENT_BALANCE);
         }
 
-        // 安全更新 AMM 流动性
-        let k = calculate_k_safe(self.yes_liquidity, self.no_liquidity)?;
+        // Burn the user's shares from total supply
         if is_yes_sell {
-            self.yes_liquidity = safe_add(self.yes_liquidity, shares_to_sell)?;
-            self.no_liquidity = calculate_new_liquidity_safe(k, self.yes_liquidity)?;
             self.total_yes_shares = safe_sub(self.total_yes_shares, shares_to_sell)?;
         } else {
-            self.no_liquidity = safe_add(self.no_liquidity, shares_to_sell)?;
-            self.yes_liquidity = calculate_new_liquidity_safe(k, self.no_liquidity)?;
             self.total_no_shares = safe_sub(self.total_no_shares, shares_to_sell)?;
         }
 
-        // 安全更新状态
-        self.prize_pool = safe_sub(self.prize_pool, payout)?;
-        self.total_fees_collected = safe_add(self.total_fees_collected, fee)?;
-        // 将卖出金额（payout + fee）计入总交易量
-        let total_transaction_value = safe_add(payout, fee)?;
-        self.total_volume = safe_add(self.total_volume, total_transaction_value)?;
+        // Pay the trader only the net payout from the pool;
+        // protocol fee is *not* paid out — it's retained
+        self.pool_balance = safe_sub(self.pool_balance, payout_tokens)?;
+        self.total_fees_collected = safe_add(self.total_fees_collected, fee_tokens)?;
 
-        Ok(payout)
+        // Record economic size: sell-side trade value = payout + fee
+        let tx_value = safe_add(payout_tokens, fee_tokens)?;
+        self.total_volume = safe_add(self.total_volume, tx_value)?;
+
+        Ok(payout_tokens)
     }
 
 
@@ -377,7 +404,7 @@ impl MarketData {
 
     // 安全计算奖金
     pub fn calculate_payout(&self, yes_shares: u64, no_shares: u64) -> Result<u64, u32> {
-        if !self.resolved || self.prize_pool == 0 {
+        if !self.resolved || self.pool_balance == 0 {
             return Ok(0);
         }
 
@@ -387,35 +414,27 @@ impl MarketData {
                 if self.total_yes_shares == 0 {
                     return Ok(0);
                 }
-                safe_div_high_precision(yes_shares, self.prize_pool, self.total_yes_shares)
+                safe_div_high_precision(yes_shares, self.pool_balance, self.total_yes_shares)
             },
             Some(false) => {
                 // NO 获胜
                 if self.total_no_shares == 0 {
                     return Ok(0);
                 }
-                safe_div_high_precision(no_shares, self.prize_pool, self.total_no_shares)
+                safe_div_high_precision(no_shares, self.pool_balance, self.total_no_shares)
             },
             None => Ok(0),
         }
     }
 
-    // // 获取份额价值（解决前估算）- 前端分析用，后端不使用
-    // pub fn get_share_value(&self, is_yes_share: bool) -> Result<u64, u32> {
-    //     if self.prize_pool == 0 {
-    //         return Ok(0);
-    //     }
-    //     
-    //     if is_yes_share {
-    //         if self.total_yes_shares == 0 { return Ok(0); }
-    //         let total_shares = safe_add(self.total_yes_shares, self.total_no_shares)?;
-    //         safe_div(self.prize_pool, total_shares)
-    //     } else {
-    //         if self.total_no_shares == 0 { return Ok(0); }
-    //         let total_shares = safe_add(self.total_yes_shares, self.total_no_shares)?;
-    //         safe_div(self.prize_pool, total_shares)
-    //     }
-    // }
+    pub fn withdraw_fees(&mut self, amount: u64) -> Result<u64, u32> {
+        if amount == 0 || amount > self.total_fees_collected {
+            return Err(ERROR_INVALID_BET_AMOUNT);
+        }
+        self.total_fees_collected = safe_sub(self.total_fees_collected, amount)?;
+        // no impact on pool_balance; fees are separate by design
+        Ok(amount)
+    }
 }
 
 impl StorageData for MarketData {
@@ -431,12 +450,11 @@ impl StorageData for MarketData {
             start_time: *u64data.next().unwrap(),
             end_time: *u64data.next().unwrap(),
             resolution_time: *u64data.next().unwrap(),
-            yes_liquidity: *u64data.next().unwrap(),
-            no_liquidity: *u64data.next().unwrap(),
-            prize_pool: *u64data.next().unwrap(),
-            total_volume: *u64data.next().unwrap(),
             total_yes_shares: *u64data.next().unwrap(),
             total_no_shares: *u64data.next().unwrap(),
+            b: *u64data.next().unwrap(),
+            pool_balance: *u64data.next().unwrap(),
+            total_volume: *u64data.next().unwrap(),
             resolved: *u64data.next().unwrap() != 0,
             outcome: {
                 let outcome_val = *u64data.next().unwrap();
@@ -454,12 +472,11 @@ impl StorageData for MarketData {
         data.push(self.start_time);
         data.push(self.end_time);
         data.push(self.resolution_time);
-        data.push(self.yes_liquidity);
-        data.push(self.no_liquidity);
-        data.push(self.prize_pool);
-        data.push(self.total_volume);
         data.push(self.total_yes_shares);
         data.push(self.total_no_shares);
+        data.push(self.b);
+        data.push(self.pool_balance);
+        data.push(self.total_volume);
         data.push(if self.resolved { 1 } else { 0 });
         data.push(match self.outcome {
             None => 0,
