@@ -88,14 +88,15 @@ export class Player extends PlayerConvention {
         return await this.sendTransactionWithCommand(cmd);
     }
 
-    // Create markets with relative time offsets
+    // Create markets with relative time offsets (LMSR)
     async createMarket(
         title: string,
         startTimeOffset: bigint,    // Offset from current counter
         endTimeOffset: bigint,      // Offset from current counter
         resolutionTimeOffset: bigint, // Offset from current counter
-        yesLiquidity: bigint,
-        noLiquidity: bigint
+        initialYesLiquidity: bigint, // Initial YES shares for LMSR
+        initialNoLiquidity: bigint,  // Initial NO shares for LMSR
+        b: bigint                    // LMSR liquidity parameter (market depth)
     ) {
         // Validate title length before creating market
         const titleValidation = validateMarketTitleLength(title);
@@ -106,17 +107,19 @@ export class Player extends PlayerConvention {
         let nonce = await this.getNonce();
         const titleU64Array = stringToU64Array(title);
         
-        // Build command: [cmd, ...title_u64s, start_time_offset, end_time_offset, resolution_time_offset, yes_liquidity, no_liquidity]
+        // Build command: [cmd, ...title_u64s, start_time_offset, end_time_offset, resolution_time_offset, yes_liquidity, no_liquidity, b]
         const params = [
             ...titleU64Array,
             startTimeOffset,
             endTimeOffset,
             resolutionTimeOffset,
-            yesLiquidity,
-            noLiquidity
+            initialYesLiquidity,
+            initialNoLiquidity,
+            b
         ];
         
         let cmd = createCommand(nonce, BigInt(CREATE_MARKET), params);
+        console.log('123123123')
         return await this.sendTransactionWithCommand(cmd);
     }
 
@@ -133,7 +136,7 @@ export class Player extends PlayerConvention {
     }
 }
 
-// Updated interfaces for multi-market support
+// Updated interfaces for multi-market support (LMSR)
 export interface MarketData {
     marketId: string;
     title: string;
@@ -141,12 +144,11 @@ export interface MarketData {
     startTime: string;
     endTime: string;
     resolutionTime: string;
-    yesLiquidity: string;
-    noLiquidity: string;
-    prizePool: string;
-    totalVolume: string;
     totalYesShares: string;
     totalNoShares: string;
+    b: string;              // LMSR liquidity parameter
+    poolBalance: string;    // Collateral in the AMM bank
+    totalVolume: string;
     resolved: boolean;
     outcome: boolean | null;
     totalFeesCollected: string;
@@ -268,13 +270,15 @@ export class PredictionMarketAPI {
         return result.data;
     }
 
-    // Calculation functions updated for specific market
+    // Calculation functions - NOTE: These are AMM approximations for frontend estimation
+    // Actual calculations are done via LMSR on the backend. These are kept for compatibility
+    // but should not be used for actual trading decisions.
     calculateShares(betType: number, amount: number, yesLiquidity: bigint, noLiquidity: bigint): bigint {
         const betAmount = BigInt(amount);
         const fee = (betAmount * PLATFORM_FEE_RATE + FEE_BASIS_POINTS - 1n) / FEE_BASIS_POINTS;
         const netAmount = betAmount - fee;
         
-        // AMM calculation: k = x * y
+        // AMM calculation: k = x * y (approximation only, backend uses LMSR)
         const k = yesLiquidity * noLiquidity;
         
         if (betType === 1) { // YES bet
@@ -412,8 +416,9 @@ export function buildCreateMarketTransaction(
     startTimeOffset: bigint,     // Offset from current counter
     endTimeOffset: bigint,       // Offset from current counter
     resolutionTimeOffset: bigint, // Offset from current counter
-    yesLiquidity: bigint,
-    noLiquidity: bigint
+    initialYesLiquidity: bigint, // Initial YES shares for LMSR
+    initialNoLiquidity: bigint,  // Initial NO shares for LMSR
+    b: bigint                    // LMSR liquidity parameter
 ): bigint[] {
     // Validate title length before creating transaction
     const titleValidation = validateMarketTitleLength(title);
@@ -429,8 +434,9 @@ export function buildCreateMarketTransaction(
         startTimeOffset,
         endTimeOffset,
         resolutionTimeOffset,
-        yesLiquidity,
-        noLiquidity
+        initialYesLiquidity,
+        initialNoLiquidity,
+        b
     ];
 }
 

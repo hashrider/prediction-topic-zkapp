@@ -28,9 +28,10 @@ async function main() {
       console.log(`  Market ${index + 1}:`);
       console.log(`    ID: ${market.marketId}`);
       console.log(`    Title: ${market.titleString || 'No title'}`);
-      console.log(`    YES Liquidity: ${market.yesLiquidity}`);
-      console.log(`    NO Liquidity: ${market.noLiquidity}`);
-      console.log(`    Prize Pool: ${market.prizePool}`);
+      console.log(`    Total YES Shares: ${market.totalYesShares}`);
+      console.log(`    Total NO Shares: ${market.totalNoShares}`);
+      console.log(`    Pool Balance: ${market.poolBalance}`);
+      console.log(`    LMSR Parameter b: ${market.b}`);
       console.log(`    Total Volume: ${market.totalVolume}`);
       console.log(`    Resolved: ${market.resolved}`);
       if (market.resolved) {
@@ -51,12 +52,11 @@ async function main() {
     console.log("Market details:", {
       id: marketDetails.marketId,
       title: marketDetails.titleString || 'No title',
-      yesLiquidity: marketDetails.yesLiquidity,
-      noLiquidity: marketDetails.noLiquidity,
-      prizePool: marketDetails.prizePool,
-      totalVolume: marketDetails.totalVolume,
       totalYesShares: marketDetails.totalYesShares,
       totalNoShares: marketDetails.totalNoShares,
+      b: marketDetails.b,
+      poolBalance: marketDetails.poolBalance,
+      totalVolume: marketDetails.totalVolume,
       resolved: marketDetails.resolved,
       outcome: marketDetails.outcome
     });
@@ -171,46 +171,48 @@ async function main() {
     }
     await delay(1000);
 
-    // Test 9: Price calculations for first market (frontend calculations)
+    // Test 9: Price calculations for first market (frontend AMM approximations)
+    // NOTE: Backend uses LMSR, these are AMM approximations for display only
     const market = markets[0];
-    console.log(`\n9. Frontend price calculations for market ${market.marketId}:`);
+    console.log(`\n9. Frontend price calculations for market ${market.marketId} (AMM approximation):`);
     
-    const yesLiquidity = BigInt(market.yesLiquidity);
-    const noLiquidity = BigInt(market.noLiquidity);
+    // Use shares as liquidity for approximation (not accurate for LMSR)
+    const yesShares = BigInt(market.totalYesShares);
+    const noShares = BigInt(market.totalNoShares);
     
-    // Current prices
-    const prices = api.calculatePrices(yesLiquidity, noLiquidity);
-    console.log(`  Current prices: YES=${(prices.yesPrice * 100).toFixed(2)}%, NO=${(prices.noPrice * 100).toFixed(2)}%`);
+    // Current prices (AMM approximation)
+    const prices = api.calculatePrices(yesShares, noShares);
+    console.log(`  Current prices (AMM approx): YES=${(prices.yesPrice * 100).toFixed(2)}%, NO=${(prices.noPrice * 100).toFixed(2)}%`);
     
-    // Expected shares for 1000 unit bet
+    // Expected shares for 1000 unit bet (AMM approximation)
     const betAmount = 1000;
-    const expectedYesShares = api.calculateShares(1, betAmount, yesLiquidity, noLiquidity);
-    const expectedNoShares = api.calculateShares(0, betAmount, yesLiquidity, noLiquidity);
-    console.log(`  Expected shares for ${betAmount} units: YES=${expectedYesShares}, NO=${expectedNoShares}`);
+    const expectedYesShares = api.calculateShares(1, betAmount, yesShares, noShares);
+    const expectedNoShares = api.calculateShares(0, betAmount, yesShares, noShares);
+    console.log(`  Expected shares for ${betAmount} units (AMM approx): YES=${expectedYesShares}, NO=${expectedNoShares}`);
     
-    // Buy prices
-    const yesBuyPrice = api.getBuyPrice(1, betAmount, yesLiquidity, noLiquidity);
-    const noBuyPrice = api.getBuyPrice(0, betAmount, yesLiquidity, noLiquidity);
-    console.log(`  Buy prices: YES=${yesBuyPrice.toFixed(6)}, NO=${noBuyPrice.toFixed(6)}`);
+    // Buy prices (AMM approximation)
+    const yesBuyPrice = api.getBuyPrice(1, betAmount, yesShares, noShares);
+    const noBuyPrice = api.getBuyPrice(0, betAmount, yesShares, noShares);
+    console.log(`  Buy prices (AMM approx): YES=${yesBuyPrice.toFixed(6)}, NO=${noBuyPrice.toFixed(6)}`);
     
-    // Market impact
-    const yesImpact = api.calculateMarketImpact(1, betAmount, yesLiquidity, noLiquidity);
-    console.log(`  YES bet impact: ${(yesImpact.currentYesPrice * 100).toFixed(2)}% → ${(yesImpact.newYesPrice * 100).toFixed(2)}%`);
+    // Market impact (AMM approximation)
+    const yesImpact = api.calculateMarketImpact(1, betAmount, yesShares, noShares);
+    console.log(`  YES bet impact (AMM approx): ${(yesImpact.currentYesPrice * 100).toFixed(2)}% → ${(yesImpact.newYesPrice * 100).toFixed(2)}%`);
     
-    // Slippage
-    const yesSlippage = api.calculateSlippage(1, betAmount, yesLiquidity, noLiquidity);
-    console.log(`  YES bet slippage: ${yesSlippage.toFixed(4)}%`);
+    // Slippage (AMM approximation)
+    const yesSlippage = api.calculateSlippage(1, betAmount, yesShares, noShares);
+    console.log(`  YES bet slippage (AMM approx): ${yesSlippage.toFixed(4)}%`);
 
     // Test 10: Platform statistics (calculated from markets data)
     console.log(`\n10. Platform statistics (calculated from markets):`);
-    let totalYesLiquidity = 0n;
-    let totalNoLiquidity = 0n;
+    let totalYesShares = 0n;
+    let totalNoShares = 0n;
     let totalVolume = 0n;
     let resolvedMarkets = 0;
     
     markets.forEach(m => {
-      totalYesLiquidity += BigInt(m.yesLiquidity);
-      totalNoLiquidity += BigInt(m.noLiquidity);
+      totalYesShares += BigInt(m.totalYesShares);
+      totalNoShares += BigInt(m.totalNoShares);
       totalVolume += BigInt(m.totalVolume || "0");
       if (m.resolved) resolvedMarkets++;
     });
@@ -218,8 +220,8 @@ async function main() {
     console.log(`  Total Markets: ${markets.length}`);
     console.log(`  Resolved Markets: ${resolvedMarkets}`);
     console.log(`  Active Markets: ${markets.length - resolvedMarkets}`);
-    console.log(`  Total YES Liquidity: ${totalYesLiquidity}`);
-    console.log(`  Total NO Liquidity: ${totalNoLiquidity}`);
+    console.log(`  Total YES Shares: ${totalYesShares}`);
+    console.log(`  Total NO Shares: ${totalNoShares}`);
     console.log(`  Total Platform Volume: ${totalVolume}`);
 
   } catch (e) {

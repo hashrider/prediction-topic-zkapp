@@ -1,16 +1,11 @@
 import { Player, PredictionMarketAPI } from "./api.js";
+import { PrivateKey, bnToHexLe } from "delphinus-curves/src/altjubjub";
 //import { LeHexBN, ZKWasmAppRpc} from "zkwasm-minirollup-rpc";
 import { LeHexBN, query, ZKWasmAppRpc } from "zkwasm-ts-server";
 
-const adminAccount = "1234";  // Admin account for creating markets
+const adminAccount = process.env.SERVER_ADMIN_KEY || '';
 const player1Key = "456789789";
 const player2Key = "987654321";
-
-const rpc: any = new ZKWasmAppRpc("http://127.0.0.1:3000");
-const adminPlayer = new Player(adminAccount, rpc);
-const player1 = new Player(player1Key, rpc);
-const player2 = new Player(player2Key, rpc);
-const api = new PredictionMarketAPI("http://127.0.0.1:3000");
 
 // Function to pause execution for a given duration
 function delay(ms: number) {
@@ -18,6 +13,12 @@ function delay(ms: number) {
 }
 
 async function main() {
+  const rpc: any = new ZKWasmAppRpc("http://localhost:3000");
+  const adminPlayer = new Player(adminAccount, rpc);
+  const player1 = new Player(player1Key, rpc);
+  const player2 = new Player(player2Key, rpc);
+  const api = new PredictionMarketAPI();
+
   const adminPubkey = new LeHexBN(query(adminAccount).pkx).toU64Array();
   const pubkey1 = new LeHexBN(query(player1Key).pkx).toU64Array();
   const pubkey2 = new LeHexBN(query(player2Key).pkx).toU64Array();
@@ -25,6 +26,19 @@ async function main() {
   console.log("Admin pubkey:", adminPubkey);
   console.log("Player 1 pubkey:", pubkey1);
   console.log("Player 2 pubkey:", pubkey2);
+
+  
+        // Get player PIDs for deposits
+        let player1Pkey = PrivateKey.fromString(player1.processingKey);
+        let player1Pubkey = player1Pkey.publicKey.key.x.v;
+        let player1LeHexBN = new LeHexBN(bnToHexLe(player1Pubkey));
+        let player1PkeyArray = player1LeHexBN.toU64Array();
+        
+        let player2Pkey = PrivateKey.fromString(player2.processingKey);
+        let player2Pubkey = player2Pkey.publicKey.key.x.v;
+        let player2LeHexBN = new LeHexBN(bnToHexLe(player2Pubkey));
+        let player2PkeyArray = player2LeHexBN.toU64Array();
+
 
   try {
     console.log("=== Simplified Multi-Market User Testing ===\n");
@@ -51,7 +65,7 @@ async function main() {
     } catch (e) {
       console.log("  Player 2 already exists");
     }
-    await delay(2000);
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     // Step 2: Create a new market (admin only)
     console.log("\n2. Creating a new market...");
@@ -59,12 +73,12 @@ async function main() {
       const marketTitle = "Will Bitcoin reach $100K by 2025?";
       // Using relative time offsets (relative to current counter)
       const startTimeOffset = 0n;    // Start immediately 
-      const endTimeOffset = 100n;    // End after 100 counter ticks
-      const resolutionTimeOffset = 120n; // Resolve after 120 counter ticks
-      const initialLiquidity = 50000n; // 50,000 units initial liquidity
+      const endTimeOffset = 100000n;    // End after 100k counter ticks
+      const resolutionTimeOffset = 100000n; // Resolve after 100k counter ticks
+      const initialLiquidity = 100000n; // 100,000 units initial shares (q/b = 0.1 for LMSR)
       
       console.log(`  Creating market: "${marketTitle}"`);
-      console.log(`  Initial liquidity: ${initialLiquidity} each side`);
+      console.log(`  Initial shares: ${initialLiquidity} each side`);
       console.log(`  Time offsets: start=${startTimeOffset}, end=${endTimeOffset}, resolve=${resolutionTimeOffset}`);
       
       await adminPlayer.createMarket(
@@ -73,13 +87,21 @@ async function main() {
         endTimeOffset,
         resolutionTimeOffset,
         initialLiquidity,
-        initialLiquidity
+        initialLiquidity,
+        1000000n  // b parameter for LMSR (q/b = 0.1)
       );
+      await new Promise(resolve => setTimeout(resolve, 2000));
       console.log("  Market created successfully!");
   } catch (e) {
       console.log("  Market creation failed:", e);
   }
     await delay(3000);
+
+    await adminPlayer.depositFunds(10000n, player1PkeyArray[1], player1PkeyArray[2]);
+    console.log("Deposited 10000 for Player1");
+    
+    await adminPlayer.depositFunds(8000n, player2PkeyArray[1], player2PkeyArray[2]);
+    console.log("Deposited 8000 for Player2");
 
     // Step 3: Get all markets
     console.log("\n3. Fetching available markets...");
@@ -95,9 +117,10 @@ async function main() {
     const testMarket = markets[0];
     const marketId = BigInt(testMarket.marketId);
     console.log(`  Using market ${testMarket.marketId}: "${testMarket.titleString || 'No title'}"`);
-    console.log(`  YES Liquidity: ${testMarket.yesLiquidity}`);
-    console.log(`  NO Liquidity: ${testMarket.noLiquidity}`);
-    console.log(`  Prize Pool: ${testMarket.prizePool}`);
+    console.log(`  Total YES Shares: ${testMarket.totalYesShares}`);
+    console.log(`  Total NO Shares: ${testMarket.totalNoShares}`);
+    console.log(`  Pool Balance: ${testMarket.poolBalance}`);
+    console.log(`  LMSR Parameter b: ${testMarket.b}`);
     console.log(`  Total Volume: ${testMarket.totalVolume}`);
     await delay(1000);
 
@@ -134,19 +157,20 @@ async function main() {
     const updatedMarket = await api.getMarket(testMarket.marketId);
     console.log("  Updated market data:");
     console.log(`    Title: ${updatedMarket.titleString || 'No title'}`);
-    console.log(`    YES Liquidity: ${updatedMarket.yesLiquidity}`);
-    console.log(`    NO Liquidity: ${updatedMarket.noLiquidity}`);
-    console.log(`    Prize Pool: ${updatedMarket.prizePool}`);
+    console.log(`    Total YES Shares: ${updatedMarket.totalYesShares}`);
+    console.log(`    Total NO Shares: ${updatedMarket.totalNoShares}`);
+    console.log(`    Pool Balance: ${updatedMarket.poolBalance}`);
+    console.log(`    LMSR Parameter b: ${updatedMarket.b}`);
     console.log(`    Total Volume: ${updatedMarket.totalVolume}`);
     console.log(`    Total YES Shares: ${updatedMarket.totalYesShares}`);
     console.log(`    Total NO Shares: ${updatedMarket.totalNoShares}`);
     console.log(`    Fees Collected: ${updatedMarket.totalFeesCollected}`);
 
-    // Calculate new prices
-    const yesLiq = BigInt(updatedMarket.yesLiquidity);
-    const noLiq = BigInt(updatedMarket.noLiquidity);
-    const prices = api.calculatePrices(yesLiq, noLiq);
-    console.log(`    Current prices: YES=${(prices.yesPrice * 100).toFixed(2)}%, NO=${(prices.noPrice * 100).toFixed(2)}%`);
+    // Calculate new prices (AMM approximation - backend uses LMSR)
+    const yesShares = BigInt(updatedMarket.totalYesShares);
+    const noShares = BigInt(updatedMarket.totalNoShares);
+    const prices = api.calculatePrices(yesShares, noShares);
+    console.log(`    Current prices (AMM approx): YES=${(prices.yesPrice * 100).toFixed(2)}%, NO=${(prices.noPrice * 100).toFixed(2)}%`);
     await delay(1000);
 
     // Step 8: Check player positions
@@ -266,15 +290,15 @@ async function main() {
 
     // Step 12: Platform statistics calculated from markets
     console.log("\n12. Platform statistics...");
-    let totalYesLiquidity = 0n;
-    let totalNoLiquidity = 0n;
+    let totalYesShares = 0n;
+    let totalNoShares = 0n;
     let totalVolume = 0n;
     let activeMarkets = 0;
     let resolvedMarkets = 0;
     
     markets.forEach(m => {
-      totalYesLiquidity += BigInt(m.yesLiquidity);
-      totalNoLiquidity += BigInt(m.noLiquidity);
+      totalYesShares += BigInt(m.totalYesShares);
+      totalNoShares += BigInt(m.totalNoShares);
       totalVolume += BigInt(m.totalVolume || "0");
       if (m.resolved) {
         resolvedMarkets++;
@@ -287,13 +311,13 @@ async function main() {
     console.log(`    Total Markets: ${markets.length}`);
     console.log(`    Active Markets: ${activeMarkets}`);
     console.log(`    Resolved Markets: ${resolvedMarkets}`);
-    console.log(`    Total Platform Liquidity: ${totalYesLiquidity + totalNoLiquidity}`);
+    console.log(`    Total Platform Shares: ${totalYesShares + totalNoShares}`);
     console.log(`    Total Platform Volume: ${totalVolume}`);
     
-    // Calculate platform-wide average price (frontend calculation)
-    const platformAvgYesPrice = totalNoLiquidity > 0n ? 
-      Number(totalNoLiquidity) / Number(totalYesLiquidity + totalNoLiquidity) : 0.5;
-    console.log(`    Platform Average YES Price: ${(platformAvgYesPrice * 100).toFixed(2)}%`);
+    // Calculate platform-wide average price (AMM approximation)
+    const platformAvgYesPrice = totalNoShares > 0n ? 
+      Number(totalNoShares) / Number(totalYesShares + totalNoShares) : 0.5;
+    console.log(`    Platform Average YES Price (AMM approx): ${(platformAvgYesPrice * 100).toFixed(2)}%`);
 
   } catch (e) {
     console.error("Error during testing:", e);

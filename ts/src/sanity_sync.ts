@@ -138,7 +138,8 @@ class SanitySyncService {
         BigInt(sanityMarket.end),
         BigInt(sanityMarket.resolve),
         BigInt(sanityMarket.yes),
-        BigInt(sanityMarket.no)
+        BigInt(sanityMarket.no),
+        100000n  // Default b parameter for LMSR (can be made configurable)
       );
       
       console.log(`✅ Successfully created market ${sanityMarket.id}`);

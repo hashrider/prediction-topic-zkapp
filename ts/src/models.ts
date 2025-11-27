@@ -22,8 +22,10 @@ export const LIQUIDITY_HISTORY_INFO = 2;
 
 // ActionType enum removed - no longer needed since liquidity history only tracks snapshots
 
-// 价格计算工具类
+// Price calculation tool class - Note: Actual pricing is now done via LMSR on the backend
+// This is kept for reference/compatibility but prices should be fetched from backend
 export class PriceCalculator {
+    // Deprecated: Use backend LMSR pricing instead
     static calculatePrice(yesLiquidity: bigint, noLiquidity: bigint): { yesPrice: bigint, noPrice: bigint } {
         const totalLiq = yesLiquidity + noLiquidity;
         if (totalLiq === 0n) {
@@ -98,19 +100,22 @@ export class IndexedObject {
     }
 }
 
-// Market data structure matching Rust backend
+// Market data structure matching Rust backend (LMSR)
 export class MarketData {
     marketId?: bigint;
     title: bigint[];
     startTime: bigint;
     endTime: bigint;
     resolutionTime: bigint;
-    yesLiquidity: bigint;
-    noLiquidity: bigint;
-    prizePool: bigint;
-    totalVolume: bigint;
+    // LMSR state = outstanding shares
     totalYesShares: bigint;
     totalNoShares: bigint;
+    // LMSR liquidity parameter b (market depth)
+    b: bigint;
+    // Collateral in the AMM bank
+    poolBalance: bigint;
+    // Volume stats
+    totalVolume: bigint;
     resolved: boolean;
     outcome: boolean | null;
     totalFeesCollected: bigint;
@@ -120,12 +125,11 @@ export class MarketData {
         this.startTime = data.startTime || 0n;
         this.endTime = data.endTime || 0n;
         this.resolutionTime = data.resolutionTime || 0n;
-        this.yesLiquidity = data.yesLiquidity || 0n;
-        this.noLiquidity = data.noLiquidity || 0n;
-        this.prizePool = data.prizePool || 0n;
-        this.totalVolume = data.totalVolume || 0n;
         this.totalYesShares = data.totalYesShares || 0n;
         this.totalNoShares = data.totalNoShares || 0n;
+        this.b = data.b || 0n;
+        this.poolBalance = data.poolBalance || 0n;
+        this.totalVolume = data.totalVolume || 0n;
         this.resolved = data.resolved || false;
         this.outcome = data.outcome;
         this.totalFeesCollected = data.totalFeesCollected || 0n;
@@ -145,12 +149,11 @@ export class MarketData {
         const startTime = data[index++];
         const endTime = data[index++];
         const resolutionTime = data[index++];
-        const yesLiquidity = data[index++];
-        const noLiquidity = data[index++];
-        const prizePool = data[index++];
-        const totalVolume = data[index++];
         const totalYesShares = data[index++];
         const totalNoShares = data[index++];
+        const b = data[index++];
+        const poolBalance = data[index++];
+        const totalVolume = data[index++];
         const resolved = data[index++] === 1n;
         const outcomeValue = data[index++];
         const outcome = outcomeValue === 0n ? null : (outcomeValue === 2n ? true : false);
@@ -161,12 +164,11 @@ export class MarketData {
             startTime,
             endTime,
             resolutionTime,
-            yesLiquidity,
-            noLiquidity,
-            prizePool,
-            totalVolume,
             totalYesShares,
             totalNoShares,
+            b,
+            poolBalance,
+            totalVolume,
             resolved,
             outcome,
             totalFeesCollected
@@ -176,12 +178,12 @@ export class MarketData {
     }
 }
 
-// Liquidity History Entry - simplified to only track liquidity snapshots
+// Shares History Entry - tracks LMSR shares snapshots
 export class LiquidityHistoryEntry {
     marketId: bigint;
     counter: bigint;
-    yesLiquidity: bigint;
-    noLiquidity: bigint;
+    yesLiquidity: bigint;  // Kept name for backward compatibility, but now represents totalYesShares
+    noLiquidity: bigint;   // Kept name for backward compatibility, but now represents totalNoShares
 
     constructor(data: any) {
         this.marketId = data.marketId;
@@ -200,19 +202,18 @@ export class LiquidityHistoryEntry {
     }
 }
 
-// Market Object Schema for IndexedObject pattern - main storage
+// Market Object Schema for IndexedObject pattern - main storage (LMSR)
 const marketObjectSchema = new mongoose.Schema({
     marketId: { type: BigInt, required: true, unique: true },
     title: { type: [BigInt], required: true },
     startTime: { type: BigInt, required: true },
     endTime: { type: BigInt, required: true },
     resolutionTime: { type: BigInt, required: true },
-    yesLiquidity: { type: BigInt, required: true },
-    noLiquidity: { type: BigInt, required: true },
-    prizePool: { type: BigInt, default: 0n },
+    totalYesShares: { type: BigInt, required: true },
+    totalNoShares: { type: BigInt, required: true },
+    b: { type: BigInt, required: true },
+    poolBalance: { type: BigInt, default: 0n },
     totalVolume: { type: BigInt, default: 0n },
-    totalYesShares: { type: BigInt, default: 0n },
-    totalNoShares: { type: BigInt, default: 0n },
     resolved: { type: Boolean, default: false },
     outcome: { type: Boolean, default: null },
     totalFeesCollected: { type: BigInt, default: 0n },
@@ -391,7 +392,7 @@ export function stringToU64Array(str: string): bigint[] {
 // Market title length validation
 export function validateMarketTitleLength(title: string): { valid: boolean; message?: string; u64Count?: number } {
     const u64Array = stringToU64Array(title);
-    const MAX_TITLE_U64_COUNT = 9; // Command length limit: 1 + title_len + 5 < 16, so title_len < 10, max value is 9
+    const MAX_TITLE_U64_COUNT = 8; // Command length limit: 1 + title_len + 6 < 16, so title_len < 9, max value is 8 (for LMSR with b parameter)
     
     if (u64Array.length > MAX_TITLE_U64_COUNT) {
         return {

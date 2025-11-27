@@ -98,26 +98,28 @@ class Player extends PlayerConvention {
         return await this.sendTransactionWithCommand(cmd);
     }
 
-    // New function to create markets with relative time offsets
+    // New function to create markets with relative time offsets (LMSR)
     async createMarket(
         title: string,
         startTimeOffset: bigint,    // Offset from current counter
         endTimeOffset: bigint,      // Offset from current counter
         resolutionTimeOffset: bigint, // Offset from current counter
-        yesLiquidity: bigint,
-        noLiquidity: bigint
+        initialYesLiquidity: bigint, // Initial YES shares for LMSR
+        initialNoLiquidity: bigint,  // Initial NO shares for LMSR
+        b: bigint                    // LMSR liquidity parameter (market depth)
     ) {
         let nonce = await this.getNonce();
         const titleU64Array = stringToU64Array(title);
         
-        // Build command: [cmd, ...title_u64s, start_time_offset, end_time_offset, resolution_time_offset, yes_liquidity, no_liquidity]
+        // Build command: [cmd, ...title_u64s, start_time_offset, end_time_offset, resolution_time_offset, yes_liquidity, no_liquidity, b]
         const params = [
             ...titleU64Array,
             startTimeOffset,
             endTimeOffset,
             resolutionTimeOffset,
-            yesLiquidity,
-            noLiquidity
+            initialYesLiquidity,
+            initialNoLiquidity,
+            b
         ];
         
         let cmd = createCommand(nonce, BigInt(CREATE_MARKET), params);
@@ -255,14 +257,16 @@ async function testMultiMarketPrediction() {
         // Now using relative time offsets (relative to current counter)
         
         // Market 1: Bitcoin price prediction
+        // Using smaller q/b ratio (~0.1) for LMSR Taylor approximations to work correctly
         console.log("Creating Market 1: Bitcoin Price Prediction");
         await admin.createMarket(
             "Will Bitcoin reach $130K by end of 2025?",
             0n,    // Start immediately (offset 0)
-            100000n,  // End after 50 counter ticks
-            100000n,  // Resolve after 50 counter ticks
-            1000000n, // 50K initial YES liquidity
-            1000000n  // 50K initial NO liquidity
+            100000n,  // End after 100K counter ticks
+            100000n,  // Resolve after 100K counter ticks
+            100000n,   // 100K initial YES shares (q/b = 0.1)
+            100000n,   // 100K initial NO shares (q/b = 0.1)
+            1000000n   // b parameter for LMSR
         );
         
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -272,10 +276,11 @@ async function testMultiMarketPrediction() {
         await admin.createMarket(
             "Will candidate A win the election?",
             0n,    // Start immediately (offset 0)
-            50000n,  // End after 50 counter ticks
-            50000n,  // Resolve after 50 counter ticks
-            1000000n, // 30K initial YES liquidity
-            1000000n  // 70K initial NO liquidity (biased market)
+            50000n,  // End after 50K counter ticks
+            50000n,  // Resolve after 50K counter ticks
+            100000n,  // 100K initial YES shares (q/b = 0.1)
+            100000n,  // 100K initial NO shares (q/b = 0.1)
+            1000000n   // b parameter for LMSR
         );
         
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -285,10 +290,11 @@ async function testMultiMarketPrediction() {
         await admin.createMarket(
             "Will Team X win the championship?",
             0n,    // Start immediately (offset 0)
-            30000n,  // End after 50 counter ticks
-            30000n,  // Resolve after 50 counter ticks
-            1000000n, // 25K initial YES liquidity
-            1000000n  // 25K initial NO liquidity
+            30000n,  // End after 30K counter ticks
+            30000n,  // Resolve after 30K counter ticks
+            100000n,  // 100K initial YES shares (q/b = 0.1)
+            100000n,  // 100K initial NO shares (q/b = 0.1)
+            1000000n   // b parameter for LMSR
         );
 
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -319,7 +325,6 @@ async function testMultiMarketPrediction() {
         } catch (error) {
             console.log("Player1 bet error:", error);
         }
-        
         // Player2 bets on NO
         try {
             await player2.placeBet(market1Id, 0, 1500n); // NO bet
