@@ -171,37 +171,38 @@ async function main() {
     }
     await delay(1000);
 
-    // Test 9: Price calculations for first market (frontend AMM approximations)
-    // NOTE: Backend uses LMSR, these are AMM approximations for display only
+    // Test 9: Price calculations for first market (frontend LMSR calculations)
+    // NOTE: Backend uses LMSR, frontend also uses LMSR for consistency
     const market = markets[0];
-    console.log(`\n9. Frontend price calculations for market ${market.marketId} (AMM approximation):`);
+    console.log(`\n9. Frontend price calculations for market ${market.marketId} (LMSR):`);
     
     // Use shares as liquidity for approximation (not accurate for LMSR)
     const yesShares = BigInt(market.totalYesShares);
     const noShares = BigInt(market.totalNoShares);
     
-    // Current prices (AMM approximation)
-    const prices = api.calculatePrices(yesShares, noShares);
-    console.log(`  Current prices (AMM approx): YES=${(prices.yesPrice * 100).toFixed(2)}%, NO=${(prices.noPrice * 100).toFixed(2)}%`);
+    // Current prices (LMSR)
+    const marketB = market.b ? BigInt(market.b) : 1000000n;
+    const prices = api.calculatePrices(yesShares, noShares, marketB);
+    console.log(`  Current prices (LMSR): YES=${(prices.yesPrice * 100).toFixed(2)}%, NO=${(prices.noPrice * 100).toFixed(2)}%`);
     
-    // Expected shares for 1000 unit bet (AMM approximation)
+    // Expected shares for 1000 unit bet (LMSR)
     const betAmount = 1000;
-    const expectedYesShares = api.calculateShares(1, betAmount, yesShares, noShares);
-    const expectedNoShares = api.calculateShares(0, betAmount, yesShares, noShares);
-    console.log(`  Expected shares for ${betAmount} units (AMM approx): YES=${expectedYesShares}, NO=${expectedNoShares}`);
+    const expectedYesShares = api.calculateShares(1, betAmount, yesShares, noShares, marketB);
+    const expectedNoShares = api.calculateShares(0, betAmount, yesShares, noShares, marketB);
+    console.log(`  Expected shares for ${betAmount} units (LMSR): YES=${expectedYesShares}, NO=${expectedNoShares}`);
     
-    // Buy prices (AMM approximation)
-    const yesBuyPrice = api.getBuyPrice(1, betAmount, yesShares, noShares);
-    const noBuyPrice = api.getBuyPrice(0, betAmount, yesShares, noShares);
-    console.log(`  Buy prices (AMM approx): YES=${yesBuyPrice.toFixed(6)}, NO=${noBuyPrice.toFixed(6)}`);
+    // Buy prices (LMSR)
+    const yesBuyPrice = api.getBuyPrice(1, betAmount, yesShares, noShares, marketB);
+    const noBuyPrice = api.getBuyPrice(0, betAmount, yesShares, noShares, marketB);
+    console.log(`  Buy prices (LMSR): YES=${yesBuyPrice.toFixed(6)}, NO=${noBuyPrice.toFixed(6)}`);
     
-    // Market impact (AMM approximation)
-    const yesImpact = api.calculateMarketImpact(1, betAmount, yesShares, noShares);
-    console.log(`  YES bet impact (AMM approx): ${(yesImpact.currentYesPrice * 100).toFixed(2)}% → ${(yesImpact.newYesPrice * 100).toFixed(2)}%`);
+    // Market impact (LMSR)
+    const yesImpact = api.calculateMarketImpact(1, betAmount, yesShares, noShares, marketB);
+    console.log(`  YES bet impact (LMSR): ${(yesImpact.currentYesPrice * 100).toFixed(2)}% → ${(yesImpact.newYesPrice * 100).toFixed(2)}%`);
     
-    // Slippage (AMM approximation)
-    const yesSlippage = api.calculateSlippage(1, betAmount, yesShares, noShares);
-    console.log(`  YES bet slippage (AMM approx): ${yesSlippage.toFixed(4)}%`);
+    // Slippage (LMSR)
+    const yesSlippage = api.calculateSlippage(1, betAmount, yesShares, noShares, marketB);
+    console.log(`  YES bet slippage (LMSR): ${yesSlippage.toFixed(4)}%`);
 
     // Test 10: Platform statistics (calculated from markets data)
     console.log(`\n10. Platform statistics (calculated from markets):`);

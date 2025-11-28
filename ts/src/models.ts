@@ -112,7 +112,7 @@ export class MarketData {
     totalNoShares: bigint;
     // LMSR liquidity parameter b (market depth)
     b: bigint;
-    // Collateral in the AMM bank
+    // Collateral in the LMSR market
     poolBalance: bigint;
     // Volume stats
     totalVolume: bigint;

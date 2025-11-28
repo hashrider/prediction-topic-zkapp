@@ -1,13 +1,13 @@
 # Prediction Market - Multi-Market zkWasm Application
 
-A comprehensive zkWasm-based prediction market platform supporting multiple markets with advanced AMM algorithms, real-time event tracking, and IndexedObject pattern implementation.
+A comprehensive zkWasm-based prediction market platform supporting multiple markets with advanced LMSR (Logarithmic Market Scoring Rule) algorithms, real-time event tracking, and IndexedObject pattern implementation.
 
 ## 🚀 Features
 
 ### Core Market Functions
 - **Multi-Market Support**: Create and manage multiple prediction markets simultaneously
 - **Dynamic Market Creation**: Admin can create markets with custom titles, timeframes, and initial liquidity
-- **AMM Algorithm**: Automated Market Maker using constant product formula (x * y = k)
+- **LMSR Algorithm**: Logarithmic Market Scoring Rule for efficient price discovery
 - **Real-time Pricing**: Continuous price discovery based on liquidity ratios
 - **Buy/Sell Operations**: Users can trade YES/NO shares with immediate execution
 - **Market Resolution**: Admin-controlled market outcomes with automatic payout calculations
@@ -36,7 +36,7 @@ A comprehensive zkWasm-based prediction market platform supporting multiple mark
 ├── event.rs               # IndexedObject event system implementation
 ├── command.rs             # Transaction command processing
 ├── player.rs              # Player data structures and operations
-├── market.rs              # Market logic and AMM algorithms
+├── market.rs              # Market logic and LMSR algorithms
 ├── math_safe.rs           # Safe mathematical operations
 ├── settlement.rs          # Withdrawal settlement system
 ├── state.rs               # Global state and market management
@@ -52,26 +52,30 @@ A comprehensive zkWasm-based prediction market platform supporting multiple mark
 └── test_user.ts           # User interaction testing
 ```
 
-## 📊 AMM Algorithm
+## 📊 LMSR Algorithm
 
-### Constant Product Formula
-- **Formula**: `x * y = k` (where x = YES liquidity, y = NO liquidity)
+### Logarithmic Market Scoring Rule
+- **Cost Function**: `C(q_yes, q_no, b) = b * ln(exp(q_yes/b) + exp(q_no/b))`
 - **Price Calculation**: 
-  - YES Price = `NO_liquidity / (YES_liquidity + NO_liquidity)`
-  - NO Price = `YES_liquidity / (YES_liquidity + NO_liquidity)`
+  - YES Price = `exp(q_yes/b) / (exp(q_yes/b) + exp(q_no/b))`
+  - NO Price = `exp(q_no/b) / (exp(q_yes/b) + exp(q_no/b))`
+- **Parameters**:
+  - `q_yes`: Total YES shares outstanding
+  - `q_no`: Total NO shares outstanding
+  - `b`: Liquidity parameter (market depth)
 - **Fee Structure**: 1% platform fee on all transactions (向上取整)
 - **Liquidity Impact**: Continuous price adjustment based on trading volume
 
 ### Example Calculation
 ```typescript
-// Initial state: YES = 1,000,000, NO = 1,000,000
+// Initial state: q_yes = 100,000, q_no = 100,000, b = 1,000,000
 // Current prices: YES = 50%, NO = 50%
 
 // User bets 10,000 on YES
 // Fee: 100 (1% of 10,000, rounded up)
 // Net amount: 9,900
-// New liquidity: YES = 910,083, NO = 1,009,900
-// New prices: YES ≈ 52.6%, NO ≈ 47.4%
+// Cost function calculates shares received based on LMSR
+// New prices adjust according to LMSR formula
 ```
 
 ## 🔌 API Endpoints
@@ -151,10 +155,11 @@ const market = await api.getMarket("0");
 console.log(`Market: ${market.titleString}`);
 console.log(`YES: ${market.yesLiquidity}, NO: ${market.noLiquidity}`);
 
-// Calculate current prices
-const yesLiq = BigInt(market.yesLiquidity);
-const noLiq = BigInt(market.noLiquidity);
-const prices = api.calculatePrices(yesLiq, noLiq);
+// Calculate current prices (LMSR)
+const yesLiq = BigInt(market.totalYesShares);
+const noLiq = BigInt(market.totalNoShares);
+const b = BigInt(market.b || 1000000); // Default b if not provided
+const prices = api.calculatePrices(yesLiq, noLiq, b);
 console.log(`Prices - YES: ${(prices.yesPrice * 100).toFixed(2)}%, NO: ${(prices.noPrice * 100).toFixed(2)}%`);
 ```
 
@@ -163,26 +168,26 @@ console.log(`Prices - YES: ${(prices.yesPrice * 100).toFixed(2)}%, NO: ${(prices
 // Place bet
 await player.placeBet(0n, 1, 10000n); // Market 0, YES, 10,000 units
 
-// Calculate expected shares
-const expectedShares = api.calculateShares(1, 10000, yesLiq, noLiq);
+// Calculate expected shares (LMSR)
+const expectedShares = api.calculateShares(1, 10000, yesLiq, noLiq, b);
 console.log(`Expected shares: ${expectedShares}`);
 
 // Sell shares
 await player.sellShares(0n, 1, 5000n); // Market 0, YES, 5,000 shares
 
-// Calculate sell value
-const sellValue = api.calculateSellValue(1, 5000, yesLiq, noLiq);
+// Calculate sell value (LMSR)
+const sellValue = api.calculateSellValue(1, 5000, yesLiq, noLiq, b);
 console.log(`Sell value: ${sellValue}`);
 ```
 
 ### Market Analysis
 ```typescript
-// Market impact analysis
-const impact = api.calculateMarketImpact(1, 50000, yesLiq, noLiq);
+// Market impact analysis (LMSR)
+const impact = api.calculateMarketImpact(1, 50000, yesLiq, noLiq, b);
 console.log(`Price impact: ${(impact.currentYesPrice * 100).toFixed(2)}% → ${(impact.newYesPrice * 100).toFixed(2)}%`);
 
-// Slippage calculation
-const slippage = api.calculateSlippage(1, 50000, yesLiq, noLiq);
+// Slippage calculation (LMSR)
+const slippage = api.calculateSlippage(1, 50000, yesLiq, noLiq, b);
 console.log(`Slippage: ${slippage.toFixed(4)}%`);
 
 // Get liquidity history
@@ -194,14 +199,15 @@ console.log(`Liquidity data points: ${history.length}`);
 ```typescript
 const admin = new Player("admin_private_key", rpc);
 
-// Create new market with relative time offsets
+// Create new market with relative time offsets (LMSR)
 await admin.createMarket(
     "Will Ethereum reach $5000 in 2024?",
     0n,      // Start immediately (0 ticks offset = 0 seconds)
     17280n,  // End in 1 day (17280 ticks * 5s = 86400s = 1 day)
     17400n,  // Resolution 10 minutes after end (17400 ticks * 5s = 87000s)
-    1000000n, // 1M YES liquidity
-    1000000n  // 1M NO liquidity
+    100000n, // Initial YES shares
+    100000n, // Initial NO shares
+    1000000n // b parameter (LMSR liquidity parameter)
 );
 
 // Time calculation examples:
@@ -366,8 +372,9 @@ interface MarketData {
     startTime: string;
     endTime: string;
     resolutionTime: string;
-    yesLiquidity: string;         // AMM liquidity
-    noLiquidity: string;          // AMM liquidity
+    totalYesShares: string;       // Total YES shares (LMSR q_yes)
+    totalNoShares: string;         // Total NO shares (LMSR q_no)
+    b: string;                    // LMSR liquidity parameter
     prizePool: string;            // Real user funds for payouts
     totalVolume: string;          // Cumulative trading volume
     totalYesShares: string;       // Total YES shares issued

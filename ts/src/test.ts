@@ -149,31 +149,32 @@ async function logStateInfo(rpc: any, player: Player, playerName: string, stepDe
     }
 }
 
-// Test AMM calculations
-function testAMMCalculations() {
-    console.log("=== Testing AMM Calculations ===");
+// Test LMSR calculations
+function testLMSRCalculations() {
+    console.log("=== Testing LMSR Calculations ===");
     
     const api = new PredictionMarketAPI();
     
     // Initial liquidity
     const initialYesLiquidity = 100000n;
     const initialNoLiquidity = 100000n;
+    const defaultB = 1000000n;
     
     console.log(`Initial liquidity - YES: ${initialYesLiquidity}, NO: ${initialNoLiquidity}`);
     
     // Test initial prices (should be 50/50)
-    const initialPrices = api.calculatePrices(initialYesLiquidity, initialNoLiquidity);
+    const initialPrices = api.calculatePrices(initialYesLiquidity, initialNoLiquidity, defaultB);
     console.log(`Initial prices - YES: ${(initialPrices.yesPrice * 100).toFixed(2)}%, NO: ${(initialPrices.noPrice * 100).toFixed(2)}%`);
     
     // Test bet calculations
     const betAmount = 10000;
     
     // Calculate YES bet
-    const yesShares = api.calculateShares(1, betAmount, initialYesLiquidity, initialNoLiquidity);
+    const yesShares = api.calculateShares(1, betAmount, initialYesLiquidity, initialNoLiquidity, defaultB);
     console.log(`\nBetting ${betAmount} on YES:`);
     console.log(`Expected shares: ${yesShares}`);
     
-    console.log("\n=== AMM Test Complete ===\n");
+    console.log("\n=== LMSR Test Complete ===\n");
 }
 
 async function testMultiMarketPrediction() {
@@ -187,9 +188,9 @@ async function testMultiMarketPrediction() {
     if (!adminKey) {
         throw new Error("SERVER_ADMIN_KEY environment variable is required");
     }
-    const player1Key = "456789789";
-    const player2Key = "987654321";
-    const player3Key = "111222333"; // Third player for more testing
+    const player1Key = "4567897";
+    const player2Key = "9876543";
+    const player3Key = "1112223"; // Third player for more testing
     
     console.log("Admin key from env:", adminKey);
     
@@ -263,7 +264,7 @@ async function testMultiMarketPrediction() {
             "Will Bitcoin reach $130K by end of 2025?",
             0n,    // Start immediately (offset 0)
             100000n,  // End after 100K counter ticks
-            100000n,  // Resolve after 100K counter ticks
+            110000n,  // Resolve after 100K counter ticks
             100000n,   // 100K initial YES shares (q/b = 0.1)
             100000n,   // 100K initial NO shares (q/b = 0.1)
             1000000n   // b parameter for LMSR
@@ -543,8 +544,8 @@ async function runExamples() {
     console.log("Running comprehensive multi-market prediction test...\n");
     
     try {
-        // Test AMM calculations first
-        testAMMCalculations();
+        // Test LMSR calculations first
+        testLMSRCalculations();
         
         // Then test all commands
         await testMultiMarketPrediction();

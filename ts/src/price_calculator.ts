@@ -1,12 +1,14 @@
 /**
- * AMM价格反推计算器
+ * LMSR价格反推计算器
  * 计算需要多少token投注才能达到目标价格
  */
 
-interface LiquidityState {
-    yesLiquidity: bigint;
-    noLiquidity: bigint;
-}
+import {
+    FP_SCALE,
+    MAX_SHARES,
+    lmsrBuyYesQuote,
+    lmsrPriceYesFp
+} from "./lmsr_math.js";
 
 interface PriceCalculationResult {
     targetPrice: number;
@@ -18,73 +20,77 @@ interface PriceCalculationResult {
     actualPrice: number;
 }
 
-export class AMMPriceCalculator {
-    private static readonly FEE_RATE = 0.01; // 1%
-    private static readonly INITIAL_YES_LIQUIDITY = 100000n;
-    private static readonly INITIAL_NO_LIQUIDITY = 100000n;
+export class LMSRPriceCalculator {
+    private static readonly INITIAL_YES_LIQUIDITY: bigint = 100000n;
+    private static readonly INITIAL_NO_LIQUIDITY: bigint = 100000n;
+    private static readonly DEFAULT_B: bigint = 1_000_000n;
+    private static readonly PLATFORM_FEE_RATE: bigint = 100n; // 1%
+    private static readonly FEE_BASIS_POINTS: bigint = 10000n;
 
     /**
-     * 计算当前价格
+     * 计算当前价格 (LMSR)
      */
-    static calculateCurrentPrice(yesLiquidity: bigint, noLiquidity: bigint): number {
-        const totalLiquidity = yesLiquidity + noLiquidity;
-        if (totalLiquidity === 0n) return 0.5;
-        
-        return Number(noLiquidity) / Number(totalLiquidity);
+    static calculateCurrentPrice(yesLiquidity: bigint, noLiquidity: bigint, b: bigint = this.DEFAULT_B): number {
+        if (yesLiquidity === 0n && noLiquidity === 0n) {
+            return 0.5;
+        }
+        const priceFp = lmsrPriceYesFp(yesLiquidity, noLiquidity, b);
+        return Number(priceFp) / Number(FP_SCALE);
     }
 
     /**
-     * 反推计算：需要多少YES投注才能达到目标价格
+     * 反推计算：需要多少YES投注才能达到目标价格 (LMSR)
      * 
-     * 公式推导：
-     * 目标价格 = 新NO流动性 / (新YES流动性 + 新NO流动性)
-     * 设投注净额为 x，则：
-     * 新NO流动性 = 原NO流动性 + x
-     * 新YES流动性 = k / 新NO流动性 = (原YES * 原NO) / (原NO + x)
-     * 
-     * target_price = (原NO + x) / ((原YES * 原NO) / (原NO + x) + 原NO + x)
-     * 
-     * 解这个方程求 x
+     * 使用二分搜索找到需要购买的YES份额数，使得价格达到目标价格
+     * Uses the same cost-based calculation as Rust backend's calculate_shares
      */
     static calculateRequiredYesBet(
         currentYesLiquidity: bigint,
         currentNoLiquidity: bigint,
-        targetPrice: number
+        targetPrice: number,
+        b: bigint = this.DEFAULT_B
     ): PriceCalculationResult {
-        const k = currentYesLiquidity * currentNoLiquidity;
-        const currentYes = Number(currentYesLiquidity);
-        const currentNo = Number(currentNoLiquidity);
+        const currentYes = BigInt(currentYesLiquidity);
+        const currentNo = BigInt(currentNoLiquidity);
+        const bBig = BigInt(b);
+
+        const targetPriceFp = BigInt(Math.round(targetPrice * Number(FP_SCALE)));
+        const currentPriceFp = lmsrPriceYesFp(currentYes, currentNo, bBig);
+
+        if (targetPriceFp <= currentPriceFp) {
+            return {
+                targetPrice,
+                requiredBetAmount: 0n,
+                netBetAmount: 0n,
+                fee: 0n,
+                newYesLiquidity: currentYes,
+                newNoLiquidity: currentNo,
+                actualPrice: Number(currentPriceFp) / Number(FP_SCALE)
+            };
+        }
         
-        // 根据目标价格反推所需的新流动性分布
-        // target_price = newNo / (newYes + newNo)
-        // target_price = newNo / total
-        // 因为 newYes * newNo = k (常数乘积)
-        // 所以 newYes = k / newNo
-        // target_price = newNo / (k/newNo + newNo) = newNo^2 / (k + newNo^2)
-        // target_price * (k + newNo^2) = newNo^2
-        // target_price * k + target_price * newNo^2 = newNo^2
-        // target_price * k = newNo^2 * (1 - target_price)
-        // newNo^2 = (target_price * k) / (1 - target_price)
-        // newNo = sqrt((target_price * k) / (1 - target_price))
-
-        const kNum = Number(k);
-        const newNoSquared = (targetPrice * kNum) / (1 - targetPrice);
-        const newNo = Math.sqrt(newNoSquared);
-        const newYes = kNum / newNo;
-
-        // 计算需要的净投注额
-        const netBetAmount = BigInt(Math.round(newNo - currentNo));
+        let lo = 0n;
+        let hi = MAX_SHARES;
         
-        // 考虑手续费，反推总投注额
-        // net_amount = total_amount * (1 - fee_rate)
-        // total_amount = net_amount / (1 - fee_rate)
-        const totalBetAmount = BigInt(Math.round(Number(netBetAmount) / (1 - this.FEE_RATE)));
-        const fee = totalBetAmount - netBetAmount;
+        while (lo < hi) {
+            const mid = lo + (hi - lo) / 2n;
+            const priceFp = lmsrPriceYesFp(currentYes + mid, currentNo, bBig);
+            if (priceFp < targetPriceFp) {
+                lo = mid + 1n;
+            } else {
+                hi = mid;
+            }
+        }
+        
+        const deltaYes = lo;
+        const netQuote = lmsrBuyYesQuote(currentYes, currentNo, bBig, deltaYes);
+        const netBetAmount = netQuote / FP_SCALE;
+        const fee = (netBetAmount * this.PLATFORM_FEE_RATE + this.FEE_BASIS_POINTS - 1n) / this.FEE_BASIS_POINTS;
+        const totalBetAmount = netBetAmount + fee;
 
-        // 验证计算结果
-        const actualNewYes = BigInt(Math.round(newYes));
-        const actualNewNo = BigInt(Math.round(newNo));
-        const actualPrice = this.calculateCurrentPrice(actualNewYes, actualNewNo);
+        const actualNewYes = currentYes + deltaYes;
+        const actualNewNo = currentNo;
+        const actualPrice = this.calculateCurrentPrice(actualNewYes, actualNewNo, bBig);
 
         return {
             targetPrice,
@@ -103,10 +109,11 @@ export class AMMPriceCalculator {
     static calculateMultipleTargets(
         currentYesLiquidity: bigint = this.INITIAL_YES_LIQUIDITY,
         currentNoLiquidity: bigint = this.INITIAL_NO_LIQUIDITY,
-        targetPrices: number[] = [0.6, 0.7, 0.8, 0.9]
+        targetPrices: number[] = [0.6, 0.7, 0.8, 0.9],
+        b: bigint = this.DEFAULT_B
     ): PriceCalculationResult[] {
         return targetPrices.map(price => 
-            this.calculateRequiredYesBet(currentYesLiquidity, currentNoLiquidity, price)
+            this.calculateRequiredYesBet(currentYesLiquidity, currentNoLiquidity, price, b)
         );
     }
 
@@ -114,8 +121,8 @@ export class AMMPriceCalculator {
      * 格式化显示结果
      */
     static formatResults(results: PriceCalculationResult[]): string {
-        let output = "\n=== AMM Price Movement Calculation Results ===\n";
-        output += "Initial State: YES=1,000,000, NO=1,000,000, Current Price=50%\n\n";
+        let output = "\n=== LMSR Price Movement Calculation Results ===\n";
+        output += "Initial State: YES=100,000, NO=100,000, Current Price=50%\n\n";
         
         results.forEach((result, index) => {
             const targetPercent = (result.targetPrice * 100).toFixed(0);
@@ -135,12 +142,20 @@ export class AMMPriceCalculator {
     /**
      * 计算累积投注效果（连续投注）
      */
-    static calculateCumulativeEffect(targetPrices: number[]): {
+    static calculateCumulativeEffect(
+        targetPrices: number[],
+        b: bigint = this.DEFAULT_B
+    ): {
         individual: PriceCalculationResult[],
         cumulative: PriceCalculationResult[]
     } {
         // 单独投注效果（从初始状态）
-        const individual = this.calculateMultipleTargets();
+        const individual = this.calculateMultipleTargets(
+            this.INITIAL_YES_LIQUIDITY,
+            this.INITIAL_NO_LIQUIDITY,
+            targetPrices,
+            b
+        );
 
         // 累积投注效果（连续投注）
         const cumulative: PriceCalculationResult[] = [];
@@ -148,7 +163,7 @@ export class AMMPriceCalculator {
         let currentNo = this.INITIAL_NO_LIQUIDITY;
 
         for (const targetPrice of targetPrices) {
-            const result = this.calculateRequiredYesBet(currentYes, currentNo, targetPrice);
+            const result = this.calculateRequiredYesBet(currentYes, currentNo, targetPrice, b);
             cumulative.push(result);
             
             // 更新流动性状态
@@ -163,11 +178,11 @@ export class AMMPriceCalculator {
 // 执行计算并输出结果
 export function calculatePriceTargets() {
     console.log("=== Individual Bet Effects (starting from 50%) ===");
-    const individualResults = AMMPriceCalculator.calculateMultipleTargets();
-    console.log(AMMPriceCalculator.formatResults(individualResults));
+    const individualResults = LMSRPriceCalculator.calculateMultipleTargets();
+    console.log(LMSRPriceCalculator.formatResults(individualResults));
 
     console.log("=== Cumulative Bet Effects (consecutive price movements) ===");
-    const { cumulative } = AMMPriceCalculator.calculateCumulativeEffect([0.6, 0.7, 0.8, 0.9]);
+    const { cumulative } = LMSRPriceCalculator.calculateCumulativeEffect([0.6, 0.7, 0.8, 0.9]);
     
     let totalInvestment = 0n;
     let currentPrice = 50;

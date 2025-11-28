@@ -4,8 +4,8 @@ import { PrivateKey, bnToHexLe } from "delphinus-curves/src/altjubjub";
 import { LeHexBN, query, ZKWasmAppRpc } from "zkwasm-ts-server";
 
 const adminAccount = process.env.SERVER_ADMIN_KEY || '';
-const player1Key = "456789789";
-const player2Key = "987654321";
+const player1Key = "4567897";
+const player2Key = "9876543";
 
 // Function to pause execution for a given duration
 function delay(ms: number) {
@@ -166,11 +166,12 @@ async function main() {
     console.log(`    Total NO Shares: ${updatedMarket.totalNoShares}`);
     console.log(`    Fees Collected: ${updatedMarket.totalFeesCollected}`);
 
-    // Calculate new prices (AMM approximation - backend uses LMSR)
+    // Calculate new prices (LMSR)
     const yesShares = BigInt(updatedMarket.totalYesShares);
     const noShares = BigInt(updatedMarket.totalNoShares);
-    const prices = api.calculatePrices(yesShares, noShares);
-    console.log(`    Current prices (AMM approx): YES=${(prices.yesPrice * 100).toFixed(2)}%, NO=${(prices.noPrice * 100).toFixed(2)}%`);
+    const updatedMarketB = updatedMarket.b ? BigInt(updatedMarket.b) : 1000000n;
+    const prices = api.calculatePrices(yesShares, noShares, updatedMarketB);
+    console.log(`    Current prices (LMSR): YES=${(prices.yesPrice * 100).toFixed(2)}%, NO=${(prices.noPrice * 100).toFixed(2)}%`);
     await delay(1000);
 
     // Step 8: Check player positions
@@ -314,10 +315,10 @@ async function main() {
     console.log(`    Total Platform Shares: ${totalYesShares + totalNoShares}`);
     console.log(`    Total Platform Volume: ${totalVolume}`);
     
-    // Calculate platform-wide average price (AMM approximation)
+    // Calculate platform-wide average price (LMSR)
     const platformAvgYesPrice = totalNoShares > 0n ? 
       Number(totalNoShares) / Number(totalYesShares + totalNoShares) : 0.5;
-    console.log(`    Platform Average YES Price (AMM approx): ${(platformAvgYesPrice * 100).toFixed(2)}%`);
+    console.log(`    Platform Average YES Price (LMSR): ${(platformAvgYesPrice * 100).toFixed(2)}%`);
 
   } catch (e) {
     console.error("Error during testing:", e);

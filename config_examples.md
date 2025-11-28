@@ -1,18 +1,34 @@
-# Market Configuration Examples
+# Market Configuration Examples (LMSR)
 
-This document shows how to customize different types of prediction markets in `src/config.rs`.
+This document shows how to create prediction markets using the LMSR (Logarithmic Market Scoring Rule) algorithm via the market creation API.
 
-## Basic Configuration Structure
+## LMSR Overview
 
-```rust
-pub static ref DEFAULT_MARKET: DefaultMarketConfig = DefaultMarketConfig {
-    title: "Market Title",
-    start_time: start_time_in_ticks,
-    end_time: end_time_in_ticks,
-    resolution_time: resolution_time_in_ticks,
-    initial_yes_liquidity: 100000,
-    initial_no_liquidity: 100000,
-};
+The market uses the Logarithmic Market Scoring Rule (LMSR) for price discovery and liquidity management:
+
+- **Cost Function**: `C(q_yes, q_no, b) = b × ln(exp(q_yes/b) + exp(q_no/b))`
+- **YES Price**: `exp(q_yes/b) / (exp(q_yes/b) + exp(q_no/b))`
+- **NO Price**: `exp(q_no/b) / (exp(q_yes/b) + exp(q_no/b))`
+
+Where:
+- `q_yes` = Total YES shares outstanding
+- `q_no` = Total NO shares outstanding  
+- `b` = Liquidity parameter (market depth)
+
+## Market Creation API
+
+Markets are created dynamically using the `CREATE_MARKET` command with the following signature:
+
+```typescript
+createMarket(
+  title: string,
+  startTimeOffset: bigint,      // Offset from current counter (in ticks)
+  endTimeOffset: bigint,        // Offset from current counter (in ticks)
+  resolutionTimeOffset: bigint, // Offset from current counter (in ticks)
+  initialYesLiquidity: bigint,  // Initial YES shares for LMSR
+  initialNoLiquidity: bigint,   // Initial NO shares for LMSR
+  b: bigint                     // LMSR liquidity parameter (market depth)
+)
 ```
 
 ## Time Conversion Reference
@@ -24,127 +40,212 @@ pub static ref DEFAULT_MARKET: DefaultMarketConfig = DefaultMarketConfig {
 - 1 week = 120960 ticks
 - 4 months = 2073600 ticks (120 days)
 
-## Liquidity Configuration
+## LMSR Parameters
 
-Initial liquidity affects market pricing and slippage:
+### Initial Liquidity (`initialYesLiquidity`, `initialNoLiquidity`)
 
-- **Higher liquidity** = Lower price impact per bet, more stable prices
-- **Lower liquidity** = Higher price impact per bet, more volatile prices
+Initial liquidity sets the starting state of the LMSR market:
+- **Higher initial liquidity** = Lower price impact per bet, more stable prices
+- **Lower initial liquidity** = Higher price impact per bet, more volatile prices
 
-### Recommended Liquidity Levels
+### Liquidity Parameter `b` (Market Depth)
 
-- **Quick markets (< 1 hour)**: 100,000 - 500,000 per side
-- **Short markets (1-24 hours)**: 500,000 - 1,000,000 per side  
-- **Medium markets (1-7 days)**: 1,000,000 - 2,000,000 per side
-- **Long markets (> 1 week)**: 2,000,000+ per side
+The `b` parameter controls market depth and price sensitivity:
+- **Higher `b`** = More liquidity depth, less price movement per trade
+- **Lower `b`** = Less liquidity depth, more price movement per trade
+- **Recommended default**: 1,000,000
 
-### Asymmetric Liquidity
+### Recommended Parameter Combinations
 
-You can also set different initial liquidity for YES and NO:
+#### Quick Markets (< 1 hour)
+- Initial liquidity: 100,000 - 500,000 per side
+- `b`: 500,000 - 1,000,000
 
-```rust
-// Market biased toward NO (cheaper YES bets initially)
-initial_yes_liquidity: 800000,
-initial_no_liquidity: 1200000,
+#### Short Markets (1-24 hours)
+- Initial liquidity: 500,000 - 1,000,000 per side
+- `b`: 1,000,000 - 2,000,000
 
-// Market biased toward YES (cheaper NO bets initially)  
-initial_yes_liquidity: 1200000,
-initial_no_liquidity: 800000,
-```
+#### Medium Markets (1-7 days)
+- Initial liquidity: 1,000,000 - 2,000,000 per side
+- `b`: 2,000,000 - 5,000,000
 
-## Configuration Examples
+#### Long Markets (> 1 week)
+- Initial liquidity: 2,000,000+ per side
+- `b`: 5,000,000+
+
+## Market Creation Examples
 
 ### 1. Short-term Market (1 hour)
 
-```rust
-pub static ref DEFAULT_MARKET: DefaultMarketConfig = DefaultMarketConfig {
-    title: "BTC 1-Hour Price Movement",
-    start_time: 0,
-    end_time: TICKS_PER_HOUR,        // 720 ticks
-    resolution_time: TICKS_PER_HOUR,
-    initial_yes_liquidity: 500000,   // Lower liquidity for shorter market
-    initial_no_liquidity: 500000,
-};
+```typescript
+await player.createMarket(
+  "BTC 1-Hour Price Movement",
+  0n,                    // Start immediately (current counter + 0)
+  720n,                  // End after 1 hour (720 ticks)
+  720n,                  // Resolution after 1 hour
+  500000n,               // Initial YES liquidity
+  500000n,               // Initial NO liquidity
+  1000000n               // b parameter
+);
 ```
 
-### 2. Medium-term Market (1 day, default configuration)
+### 2. Medium-term Market (1 day)
 
-```rust
-pub static ref DEFAULT_MARKET: DefaultMarketConfig = DefaultMarketConfig {
-    title: "Bitcoin $100K by 2024",
-    start_time: 0,
-    end_time: TICKS_PER_DAY,         // 17280 ticks
-    resolution_time: TICKS_PER_DAY,
-    initial_yes_liquidity: 100000,  // Small liquidity for testing
-    initial_no_liquidity: 100000,
-};
+```typescript
+await player.createMarket(
+  "Bitcoin $100K by 2024",
+  0n,                    // Start immediately
+  17280n,                // End after 1 day (17280 ticks)
+  17280n,                // Resolution after 1 day
+  1000000n,              // Initial YES liquidity
+  1000000n,              // Initial NO liquidity
+  2000000n               // b parameter
+);
 ```
 
 ### 3. Long-term Market (1 week)
 
-```rust
-pub static ref DEFAULT_MARKET: DefaultMarketConfig = DefaultMarketConfig {
-    title: "ETH 2.0 Full Launch",
-    start_time: 0,
-    end_time: TICKS_PER_DAY * 7,     // 120960 ticks
-    resolution_time: TICKS_PER_DAY * 7,
-    initial_yes_liquidity: 2000000,  // Higher liquidity for longer market
-    initial_no_liquidity: 2000000,
-};
+```typescript
+await player.createMarket(
+  "ETH 2.0 Full Launch",
+  0n,                    // Start immediately
+  120960n,               // End after 1 week (120960 ticks)
+  120960n,               // Resolution after 1 week
+  2000000n,              // Initial YES liquidity
+  2000000n,              // Initial NO liquidity
+  5000000n               // b parameter
+);
 ```
 
 ### 4. Delayed Resolution Market
 
-```rust
-pub static ref DEFAULT_MARKET: DefaultMarketConfig = DefaultMarketConfig {
-    title: "Stock Market Close Prediction",
-    start_time: 0,
-    end_time: TICKS_PER_HOUR * 8,        // Stop betting after 8 hours
-    resolution_time: TICKS_PER_HOUR * 10, // Can only resolve after 10 hours
-    initial_yes_liquidity: 750000,       // Medium liquidity
-    initial_no_liquidity: 750000,
-};
+```typescript
+await player.createMarket(
+  "Stock Market Close Prediction",
+  0n,                    // Start immediately
+  5760n,                 // Stop betting after 8 hours (5760 ticks)
+  7200n,                 // Can only resolve after 10 hours (7200 ticks)
+  750000n,               // Initial YES liquidity
+  750000n,               // Initial NO liquidity
+  1500000n               // b parameter
+);
 ```
 
-### 5. Custom Time Market
+### 5. Custom Time Market (30 minutes)
 
-```rust
-pub static ref DEFAULT_MARKET: DefaultMarketConfig = DefaultMarketConfig {
-    title: "30-Minute Quick Prediction",
-    start_time: 0,
-    end_time: DefaultMarketConfig::seconds_to_ticks(1800), // 30 minutes = 1800 seconds
-    resolution_time: DefaultMarketConfig::seconds_to_ticks(1800),
-    initial_yes_liquidity: 250000,       // Low liquidity for quick market
-    initial_no_liquidity: 250000,
-};
+```typescript
+// 30 minutes = 1800 seconds = 360 ticks
+await player.createMarket(
+  "30-Minute Quick Prediction",
+  0n,                    // Start immediately
+  360n,                  // End after 30 minutes (360 ticks)
+  360n,                  // Resolution after 30 minutes
+  250000n,               // Initial YES liquidity
+  250000n,               // Initial NO liquidity
+  500000n                // b parameter
+);
 ```
 
-## Utility Functions
+### 6. Asymmetric Initial Liquidity (Biased Market)
 
-Time conversion tools provided in `DefaultMarketConfig`:
+```typescript
+// Market biased toward NO (cheaper YES bets initially)
+await player.createMarket(
+  "Market with NO Bias",
+  0n,
+  17280n,                // 1 day
+  17280n,
+  800000n,               // Lower YES liquidity
+  1200000n,              // Higher NO liquidity
+  2000000n               // b parameter
+);
 
-```rust
-// Convert seconds to ticks
-let ticks = DefaultMarketConfig::seconds_to_ticks(3600); // 1 hour
-
-// Convert ticks to seconds  
-let seconds = DefaultMarketConfig::ticks_to_seconds(720); // 720 ticks = 3600 seconds
-
-// Get market duration
-let duration_ticks = DEFAULT_MARKET.duration_ticks();
-let duration_seconds = DEFAULT_MARKET.duration_seconds();
+// Market biased toward YES (cheaper NO bets initially)
+await player.createMarket(
+  "Market with YES Bias",
+  0n,
+  17280n,                // 1 day
+  17280n,
+  1200000n,             // Higher YES liquidity
+  800000n,              // Lower NO liquidity
+  2000000n              // b parameter
+);
 ```
 
-## Configuration Modification Steps
+### 7. Future Start Time Market
 
-1. Edit `DEFAULT_MARKET` configuration in `src/config.rs`
-2. Recompile: `make build`
-3. Restart application: `make run`
+```typescript
+// Market that starts 1 hour from now
+const currentCounter = await getCurrentCounter(); // Get current counter from global state
+await player.createMarket(
+  "Future Market",
+  720n,                  // Start 1 hour from now (current counter + 720)
+  25920n,                // End 1.5 days from now (current counter + 25920)
+  25920n,                // Resolution at end time
+  1000000n,
+  1000000n,
+  2000000n
+);
+```
+
+## Time Offset Calculation
+
+Time offsets are relative to the current counter when the market is created:
+
+```typescript
+// Example: Create a market that starts in 2 hours and ends in 1 day
+const TICKS_PER_HOUR = 720n;
+const TICKS_PER_DAY = 17280n;
+
+await player.createMarket(
+  "Delayed Start Market",
+  TICKS_PER_HOUR * 2n,  // Start 2 hours from now
+  TICKS_PER_DAY,        // End 1 day from now
+  TICKS_PER_DAY,        // Resolution at end time
+  1000000n,
+  1000000n,
+  2000000n
+);
+```
 
 ## Important Notes
 
-- `start_time` is usually set to 0 (start immediately when system boots)
-- `end_time` must be greater than `start_time`
-- `resolution_time` must be greater than or equal to `end_time`
-- Time unit consistently uses ticks (5 seconds per tick)
-- Recommend using predefined time constants (`TICKS_PER_HOUR` etc.) for better readability 
+- **Time offsets** are relative to the current counter when `createMarket` is called
+- `endTimeOffset` must be greater than `startTimeOffset`
+- `resolutionTimeOffset` must be greater than or equal to `endTimeOffset`
+- **Initial liquidity** sets the starting state but doesn't lock funds (LMSR uses a cost function)
+- **`b` parameter** should typically be 1-5x the initial liquidity for balanced markets
+- Higher `b` values provide more liquidity depth but require larger trades to move prices
+- Lower `b` values make prices more sensitive to trading activity
+
+## Market Creation Best Practices
+
+1. **Match `b` to expected trading volume**: Higher volume markets benefit from higher `b` values
+2. **Balance initial liquidity**: Equal YES/NO liquidity starts at 50/50 prices
+3. **Consider market duration**: Longer markets typically need higher liquidity and `b` values
+4. **Test with small values first**: Start with lower liquidity and `b` for testing
+5. **Monitor price impact**: Adjust `b` based on observed slippage in your markets
+
+## Example: Complete Market Creation Flow
+
+```typescript
+import { Player } from './api';
+import { ZKWasmAppRpc } from 'zkwasm-minirollup-rpc';
+
+// Initialize player
+const rpc = new ZKWasmAppRpc("http://localhost:3000");
+const player = new Player(adminKey, rpc);
+
+// Create a 1-day market
+const marketResult = await player.createMarket(
+  "Will Bitcoin reach $100K by end of 2024?",
+  0n,                    // Start immediately
+  17280n,                // End after 1 day
+  17280n,                // Resolution at end time
+  1000000n,              // 1M initial YES shares
+  1000000n,              // 1M initial NO shares
+  2000000n               // b = 2M for good liquidity depth
+);
+
+console.log("Market created:", marketResult);
+```

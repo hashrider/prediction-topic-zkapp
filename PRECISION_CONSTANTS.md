@@ -33,7 +33,7 @@ pub const PRICE_PRECISION: u64 = 1000000;          // 1,000,000 = 1.0
 ```
 
 **Purpose**: High precision for price calculations
-- Used for AMM price calculations where precision is critical
+- Used for LMSR price calculations where precision is critical
 - Allows for 6 decimal places of precision
 - 1,000,000 represents 1.0 (100%)
 
@@ -104,7 +104,7 @@ Different constants for different purposes make code self-documenting:
 ### 3. **Precision Requirements**
 Different calculations need different precision levels:
 - **Fees**: 0.01% precision (basis points) is sufficient
-- **Prices**: 0.0001% precision needed for accurate AMM calculations
+- **Prices**: 0.0001% precision needed for accurate LMSR calculations
 - **Simple percentages**: 1% precision is often enough
 
 ## Practical Examples
