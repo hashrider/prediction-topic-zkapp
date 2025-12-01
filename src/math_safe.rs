@@ -86,6 +86,8 @@ pub fn safe_div_high_precision(a: u64, b: u64, c: u64) -> Result<u64, u32> {
 // ---------------------------------------------------------------------------
 
 pub const FP_SCALE: u128 = 1_000_000u128; // 1e6 fixed point to match PRICE_PRECISION
+// Precomputed ln(2) in FP_SCALE (≈ 0.693147)
+pub const LN_2_FP: u128 = 693_147u128;
 
 fn fp_mul(a: u128, b: u128) -> Result<u128, u32> {
     // (a * b) / FP_SCALE
@@ -133,15 +135,29 @@ fn fp_exp_taylor(x_fp: u128) -> Result<u128, u32> {
     Ok(sum)
 }
 
-// crude ln() approximation:
-// ln(y) ≈ (y-1) - (y-1)^2/2 + (y-1)^3/3
-// y_fp is fixed point, expected near 1.0 .. a few
+// ln(y) approximation, numerically safer for larger y:
+// 1. Repeatedly factor out powers of 2 so that y_norm ∈ [1, 2]
+// 2. Use a short Taylor series around 1 for ln(y_norm)
+// ln(y) = k * ln(2) + ln(y / 2^k)
+// y_fp is fixed point in FP_SCALE.
 fn fp_ln_series(y_fp: u128) -> Result<u128, u32> {
     if y_fp < FP_SCALE {
         // not supporting <1 for safety right now
         return Err(ERROR_INVALID_CALCULATION);
     }
-    let z = y_fp.checked_sub(FP_SCALE).ok_or(ERROR_UNDERFLOW)?; // y-1
+
+    // Normalize y into [1, 2] range in fixed-point, tracking powers of 2.
+    let mut y_norm = y_fp;
+    let mut acc_ln = 0u128; // accumulated ln(2^k) in FP_SCALE
+
+    while y_norm > 2 * FP_SCALE {
+        // y_norm /= 2
+        y_norm /= 2;
+        acc_ln = acc_ln.checked_add(LN_2_FP).ok_or(ERROR_OVERFLOW)?;
+    }
+
+    // Now y_norm is in [1, 2]
+    let z = y_norm.checked_sub(FP_SCALE).ok_or(ERROR_UNDERFLOW)?; // y_norm - 1, in [0, 1]
     let z2 = fp_mul(z, z)?;   // z^2
     let z3 = fp_mul(z2, z)?;  // z^3
 
@@ -153,7 +169,10 @@ fn fp_ln_series(y_fp: u128) -> Result<u128, u32> {
 
     // term1 - term2 + term3
     let tmp = z.checked_sub(z2_over_2).ok_or(ERROR_UNDERFLOW)?;
-    let out = tmp.checked_add(z3_over_3).ok_or(ERROR_OVERFLOW)?;
+    let series = tmp.checked_add(z3_over_3).ok_or(ERROR_OVERFLOW)?;
+
+    // Add back the accumulated ln(2^k)
+    let out = acc_ln.checked_add(series).ok_or(ERROR_OVERFLOW)?;
     Ok(out)
 }
 
@@ -423,6 +442,28 @@ mod tests {
         assert!(payout.is_ok());
         assert!(payout.unwrap() > 0);
     }
+
+        #[test]
+        fn debug_lmsr_cost_shape_for_large_liquidity() {
+            // Scenario similar to production:
+            // q_yes = q_no = 100_000, b = 100_000
+            // Inspect how many tokens the LMSR quotes for different share deltas.
+            let q_yes = 100_000;
+            let q_no = 100_000;
+            let b = 100_000;
+
+            let deltas = [1000u64, 3000, 5000, 9000, 10_000];
+            for delta in deltas {
+                let cost_fp = lmsr_buy_yes_quote(q_yes, q_no, b, delta).unwrap();
+                let cost_tokens = cost_fp / FP_SCALE;
+                println!("delta_shares = {delta}, cost_tokens = {cost_tokens}");
+            }
+
+            // basic sanity: larger delta should cost more
+            let cost_small = lmsr_buy_yes_quote(q_yes, q_no, b, 1000).unwrap();
+            let cost_large = lmsr_buy_yes_quote(q_yes, q_no, b, 10_000).unwrap();
+            assert!(cost_large > cost_small);
+        }
 
     #[test]
     fn test_calculate_yes_price_lmsr() {

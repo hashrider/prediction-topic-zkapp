@@ -492,3 +492,41 @@ impl IndexedObject<MarketData> for MarketData {
     const POSTFIX: u64 = 0xfee3;
     const EVENT_NAME: u64 = 0x02;
 } 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::PRICE_PRECISION;
+
+    #[test]
+    fn test_calculate_shares_lmsr_reasonable_for_large_liquidity() {
+        // Simulate a market close to production parameters:
+        //  - 100k YES and 100k NO virtual shares
+        //  - b = 100k (liquidity parameter)
+        //  - bet 5k tokens on YES
+        //
+        // For a balanced LMSR with q_yes = q_no and b ≈ 100k,
+        // a 5k bet should buy on the order of 9k–10k YES shares.
+        let title = MarketData::string_to_u64_vec("test");
+        let mut market = MarketData::new_with_title_u64_and_liquidity(
+            title,
+            0,      // start_time
+            1_000,  // end_time
+            1_000,  // resolution_time
+            100_000, // initial_yes_liquidity
+            100_000, // initial_no_liquidity
+            100_000, // b
+        ).unwrap();
+
+        let bet_amount = 5_000u64;
+        let shares = market.calculate_shares(1, bet_amount).unwrap();
+
+        // We expect roughly 10k shares, allow some slack for approximation & fees.
+        assert!(shares > 8_000 && shares < 11_000, "unexpected shares: {}", shares);
+
+        // Sanity: resulting YES price should move upwards from ~0.5
+        market.place_bet(1, bet_amount).unwrap();
+        let p_yes = market.get_yes_price().unwrap();
+        assert!(p_yes > PRICE_PRECISION / 2);
+    }
+}
