@@ -7,10 +7,11 @@ use crate::math_safe::*;
 
 #[derive(Serialize, Clone, Debug)]
 pub struct MarketData {
-    pub title: Vec<u64>,  // Title encoded as Vec<u64> (8 bytes per u64)
+    // Time control
     pub start_time: u64,
     pub end_time: u64,
     pub resolution_time: u64,
+
     // LMSR state = outstanding shares
     pub total_yes_shares: u64,
     pub total_no_shares: u64,
@@ -24,28 +25,21 @@ pub struct MarketData {
     // Volume stats
     pub total_volume: u64,
 
+    // Resolution state
     pub resolved: bool,
     pub outcome: Option<bool>, // None = unresolved, Some(true) = Yes wins, Some(false) = No wins
     pub total_fees_collected: u64,
 }
 
 impl MarketData {
-    pub fn new_with_title_u64_and_liquidity(
-        title: Vec<u64>, 
-        start_time: u64, 
-        end_time: u64, 
+    pub fn new_with_liquidity(
+        start_time: u64,
+        end_time: u64,
         resolution_time: u64,
         initial_yes_liquidity: u64,
         initial_no_liquidity: u64,
         b: u64
     ) -> Result<Self, u32> {
-        // 验证标题长度（命令长度限制）
-        // CreateMarket命令格式：[cmd_type, title_data..., start, end, resolution, yes_liq, no_liq, b]
-        // 总长度必须 < 16，所以 title_len < 8，最大值为7 (16 - 1 - 6 = 9)
-        if title.len() > 8 {
-            return Err(crate::error::ERROR_INVALID_MARKET_TITLE);
-        }
-        
         // 验证时间参数
         if start_time >= end_time {
             return Err(crate::error::ERROR_INVALID_MARKET_TIME);
@@ -53,75 +47,30 @@ impl MarketData {
         if end_time > resolution_time {
             return Err(crate::error::ERROR_INVALID_MARKET_TIME);
         }
-        
+
         // 验证初始流动性
         validate_liquidity(initial_yes_liquidity)?;
         validate_liquidity(initial_no_liquidity)?;
-        
+
         // 验证LMSR参数b
         validate_b(b)?;
-        
+
         Ok(MarketData {
-            title,
             start_time,
             end_time,
             resolution_time,
             // Virtual liquidity for AMM pricing
-
-
             total_yes_shares: initial_yes_liquidity,
             total_no_shares:  initial_no_liquidity,
-
             b: b,
-
             pool_balance: 0,
             total_volume: 0,
-
             resolved: false,
             outcome: None,
             total_fees_collected: 0,
         })
     }
 
-
-
-    // Helper function to convert string to Vec<u64>
-    pub fn string_to_u64_vec(s: &str) -> Vec<u64> {
-        let bytes = s.as_bytes();
-        let mut result = Vec::new();
-        
-        for chunk in bytes.chunks(8) {
-            let mut value = 0u64;
-            for (i, &byte) in chunk.iter().enumerate() {
-                value |= (byte as u64) << (i * 8);
-            }
-            result.push(value);
-        }
-        
-        result
-    }
-
-    // Helper function to convert Vec<u64> back to string
-    pub fn u64_vec_to_string(title: &[u64]) -> String {
-        let mut bytes = Vec::new();
-        
-        for &value in title {
-            for i in 0..8 {
-                let byte = ((value >> (i * 8)) & 0xFF) as u8;
-                if byte != 0 {  // Stop at null terminator
-                    bytes.push(byte);
-                } else {
-                    break;
-                }
-            }
-        }
-        
-        String::from_utf8_lossy(&bytes).to_string()
-    }
-
-    pub fn get_title_string(&self) -> String {
-        Self::u64_vec_to_string(&self.title)
-    }
 
     pub fn is_active(&self, current_time: u64) -> bool {
         current_time >= self.start_time && current_time < self.end_time && !self.resolved
@@ -439,14 +388,7 @@ impl MarketData {
 
 impl StorageData for MarketData {
     fn from_data(u64data: &mut std::slice::IterMut<u64>) -> Self {
-        let title_len = *u64data.next().unwrap() as usize;
-        let mut title = Vec::new();
-        for _ in 0..title_len {
-            title.push(*u64data.next().unwrap());
-        }
-        
         MarketData {
-            title,
             start_time: *u64data.next().unwrap(),
             end_time: *u64data.next().unwrap(),
             resolution_time: *u64data.next().unwrap(),
@@ -467,8 +409,6 @@ impl StorageData for MarketData {
     }
 
     fn to_data(&self, data: &mut Vec<u64>) {
-        data.push(self.title.len() as u64);
-        data.extend_from_slice(&self.title);
         data.push(self.start_time);
         data.push(self.end_time);
         data.push(self.resolution_time);
@@ -507,9 +447,7 @@ mod tests {
         //
         // For a balanced LMSR with q_yes = q_no and b ≈ 100k,
         // a 5k bet should buy on the order of 9k–10k YES shares.
-        let title = MarketData::string_to_u64_vec("test");
-        let mut market = MarketData::new_with_title_u64_and_liquidity(
-            title,
+        let mut market = MarketData::new_with_liquidity(
             0,      // start_time
             1_000,  // end_time
             1_000,  // resolution_time

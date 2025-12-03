@@ -93,13 +93,10 @@ class SanitySyncService {
   }
 
   // Compare market data between Sanity and backend
+  // Note: Title is NOT stored in backend anymore, only time-related fields are compared
   compareMarketData(sanityMarket: SanityMarket, backendMarket: MarketData): boolean {
-    const sanityTitle = sanityMarket.name;
-    const backendTitle = backendMarket.titleString || backendMarket.title;
-    
-    // Compare basic fields
+    // Compare only time-related fields (backend doesn't store title anymore)
     const fieldsMatch = {
-      name: sanityTitle === backendTitle,
       start: sanityMarket.start.toString() === backendMarket.startTime,
       end: sanityMarket.end.toString() === backendMarket.endTime,
       resolve: sanityMarket.resolve.toString() === backendMarket.resolutionTime
@@ -110,13 +107,11 @@ class SanitySyncService {
     if (!allMatch) {
       console.error(`❌ Market ${sanityMarket.id} data mismatch:`);
       console.error('Sanity data:', {
-        name: sanityTitle,
         start: sanityMarket.start,
         end: sanityMarket.end,
         resolve: sanityMarket.resolve
       });
       console.error('Backend data:', {
-        name: backendTitle,
         start: backendMarket.startTime,
         end: backendMarket.endTime,
         resolve: backendMarket.resolutionTime
@@ -128,20 +123,21 @@ class SanitySyncService {
   }
 
   // Create new market in backend based on Sanity data
+  // Note: Title is stored in Sanity only, backend stores only core market data
   async createMarketFromSanity(sanityMarket: SanityMarket): Promise<void> {
     try {
       console.log(`🔨 Creating market ${sanityMarket.id}: "${sanityMarket.name}"`);
-      
+      console.log(`ℹ️  Title "${sanityMarket.name}" will be fetched from Sanity by frontend`);
+
       const result = await this.adminPlayer.createMarket(
-        sanityMarket.name,
         BigInt(sanityMarket.start),
         BigInt(sanityMarket.end),
         BigInt(sanityMarket.resolve),
         BigInt(sanityMarket.yes),
         BigInt(sanityMarket.no),
-        100000n  // Default b parameter for LMSR (can be made configurable)
+        1000000n  // Default b parameter for LMSR (can be made configurable)
       );
-      
+
       console.log(`✅ Successfully created market ${sanityMarket.id}`);
       console.log('Transaction result:', result);
     } catch (error) {

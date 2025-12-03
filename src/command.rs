@@ -74,7 +74,7 @@ pub enum Activity {
     Resolve(u64, u64),         // market_id, outcome
     Claim(u64),                // market_id
     WithdrawFees(u64),         // market_id
-    CreateMarket(Vec<u64>, u64, u64, u64, u64, u64, u64), // title_u64_vec, start_time_offset, end_time_offset, resolution_time_offset, yes_liquidity, no_liquidity, b
+    CreateMarket(u64, u64, u64, u64, u64, u64), // start_time_offset, end_time_offset, resolution_time_offset, yes_liquidity, no_liquidity, b
 }
 
 impl CommandHandler for Activity {
@@ -102,9 +102,9 @@ impl CommandHandler for Activity {
                         // Only admin can withdraw fees - we need to check this at a higher level
                         Self::handle_withdraw_fees(player, *market_id, counter)
                     },
-                    Activity::CreateMarket(title_u64_vec, start_time, end_time, resolution_time, yes_liquidity, no_liquidity, b) => {
+                    Activity::CreateMarket(start_time, end_time, resolution_time, yes_liquidity, no_liquidity, b) => {
                         // Only admin can create markets - we need to check this at a higher level
-                        Self::handle_create_market(title_u64_vec.clone(), *start_time, *end_time, *resolution_time, *yes_liquidity, *no_liquidity, *b, counter)
+                        Self::handle_create_market(*start_time, *end_time, *resolution_time, *yes_liquidity, *no_liquidity, *b, counter)
                     }
                 }
             }
@@ -275,14 +275,13 @@ impl Activity {
         Ok(())
     }
 
-    fn handle_create_market(title_u64_vec: Vec<u64>, start_time_offset: u64, end_time_offset: u64, resolution_time_offset: u64, yes_liquidity: u64, no_liquidity: u64, b: u64, counter: u64) -> Result<(), u32> {
+    fn handle_create_market(start_time_offset: u64, end_time_offset: u64, resolution_time_offset: u64, yes_liquidity: u64, no_liquidity: u64, b: u64, counter: u64) -> Result<(), u32> {
         // Calculate absolute times by adding offsets to current counter
         let absolute_start_time = counter + start_time_offset;
         let absolute_end_time = counter + end_time_offset;
         let absolute_resolution_time = counter + resolution_time_offset;
-        
-        let _market_id = crate::state::MarketManager::create_market_with_title_u64_and_liquidity(
-            title_u64_vec,
+
+        let _market_id = crate::state::MarketManager::create_market_with_liquidity(
             absolute_start_time,
             absolute_end_time,
             absolute_resolution_time,

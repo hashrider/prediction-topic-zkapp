@@ -21,7 +21,6 @@ Markets are created dynamically using the `CREATE_MARKET` command with the follo
 
 ```typescript
 createMarket(
-  title: string,
   startTimeOffset: bigint,      // Offset from current counter (in ticks)
   endTimeOffset: bigint,        // Offset from current counter (in ticks)
   resolutionTimeOffset: bigint, // Offset from current counter (in ticks)
@@ -30,6 +29,8 @@ createMarket(
   b: bigint                     // LMSR liquidity parameter (market depth)
 )
 ```
+
+**Note**: Market titles and metadata should be stored in Sanity CMS with matching market IDs. The smart contract only stores core market logic data.
 
 ## Time Conversion Reference
 
@@ -78,8 +79,8 @@ The `b` parameter controls market depth and price sensitivity:
 ### 1. Short-term Market (1 hour)
 
 ```typescript
+// Note: Add title "BTC 1-Hour Price Movement" to Sanity CMS with the created market ID
 await player.createMarket(
-  "BTC 1-Hour Price Movement",
   0n,                    // Start immediately (current counter + 0)
   720n,                  // End after 1 hour (720 ticks)
   720n,                  // Resolution after 1 hour
@@ -92,8 +93,8 @@ await player.createMarket(
 ### 2. Medium-term Market (1 day)
 
 ```typescript
+// Note: Add title "Bitcoin $100K by 2024" to Sanity CMS with the created market ID
 await player.createMarket(
-  "Bitcoin $100K by 2024",
   0n,                    // Start immediately
   17280n,                // End after 1 day (17280 ticks)
   17280n,                // Resolution after 1 day
@@ -106,8 +107,8 @@ await player.createMarket(
 ### 3. Long-term Market (1 week)
 
 ```typescript
+// Note: Add title "ETH 2.0 Full Launch" to Sanity CMS with the created market ID
 await player.createMarket(
-  "ETH 2.0 Full Launch",
   0n,                    // Start immediately
   120960n,               // End after 1 week (120960 ticks)
   120960n,               // Resolution after 1 week
@@ -120,8 +121,8 @@ await player.createMarket(
 ### 4. Delayed Resolution Market
 
 ```typescript
+// Note: Add title "Stock Market Close Prediction" to Sanity CMS with the created market ID
 await player.createMarket(
-  "Stock Market Close Prediction",
   0n,                    // Start immediately
   5760n,                 // Stop betting after 8 hours (5760 ticks)
   7200n,                 // Can only resolve after 10 hours (7200 ticks)
@@ -135,8 +136,8 @@ await player.createMarket(
 
 ```typescript
 // 30 minutes = 1800 seconds = 360 ticks
+// Note: Add title "30-Minute Quick Prediction" to Sanity CMS with the created market ID
 await player.createMarket(
-  "30-Minute Quick Prediction",
   0n,                    // Start immediately
   360n,                  // End after 30 minutes (360 ticks)
   360n,                  // Resolution after 30 minutes
@@ -150,8 +151,8 @@ await player.createMarket(
 
 ```typescript
 // Market biased toward NO (cheaper YES bets initially)
+// Note: Add title "Market with NO Bias" to Sanity CMS with the created market ID
 await player.createMarket(
-  "Market with NO Bias",
   0n,
   17280n,                // 1 day
   17280n,
@@ -161,8 +162,8 @@ await player.createMarket(
 );
 
 // Market biased toward YES (cheaper NO bets initially)
+// Note: Add title "Market with YES Bias" to Sanity CMS with the created market ID
 await player.createMarket(
-  "Market with YES Bias",
   0n,
   17280n,                // 1 day
   17280n,
@@ -177,8 +178,8 @@ await player.createMarket(
 ```typescript
 // Market that starts 1 hour from now
 const currentCounter = await getCurrentCounter(); // Get current counter from global state
+// Note: Add title "Future Market" to Sanity CMS with the created market ID
 await player.createMarket(
-  "Future Market",
   720n,                  // Start 1 hour from now (current counter + 720)
   25920n,                // End 1.5 days from now (current counter + 25920)
   25920n,                // Resolution at end time
@@ -197,8 +198,8 @@ Time offsets are relative to the current counter when the market is created:
 const TICKS_PER_HOUR = 720n;
 const TICKS_PER_DAY = 17280n;
 
+// Note: Add title "Delayed Start Market" to Sanity CMS with the created market ID
 await player.createMarket(
-  "Delayed Start Market",
   TICKS_PER_HOUR * 2n,  // Start 2 hours from now
   TICKS_PER_DAY,        // End 1 day from now
   TICKS_PER_DAY,        // Resolution at end time
@@ -237,8 +238,8 @@ const rpc = new ZKWasmAppRpc("http://localhost:3000");
 const player = new Player(adminKey, rpc);
 
 // Create a 1-day market
+// Note: Add title "Will Bitcoin reach $100K by end of 2024?" to Sanity CMS with the created market ID
 const marketResult = await player.createMarket(
-  "Will Bitcoin reach $100K by end of 2024?",
   0n,                    // Start immediately
   17280n,                // End after 1 day
   17280n,                // Resolution at end time
@@ -248,4 +249,5 @@ const marketResult = await player.createMarket(
 );
 
 console.log("Market created:", marketResult);
+// After market is created, add the title and metadata to Sanity CMS with the matching market ID
 ```

@@ -2,7 +2,7 @@ import { Express } from "express";
 import mongoose from 'mongoose';
 import { Event, EventModel, Service, TxStateManager, TxWitness } from "zkwasm-ts-server";
 import { merkleRootToBeHexString } from "zkwasm-ts-server/src/lib.js";
-import { BetEvent, BetModel, docToJSON, IndexedObject, LiquidityHistoryModel, MarketModel, PlayerMarketPositionModel, u64ArrayToString } from "./models.js";
+import { BetEvent, BetModel, docToJSON, IndexedObject, LiquidityHistoryModel, MarketModel, PlayerMarketPositionModel } from "./models.js";
 
 const service = new Service(eventCallback, batchedCallback, extra);
 await service.initialize();
@@ -14,15 +14,8 @@ function extra(app: Express) {
   app.get("/data/markets", async (req: any, res) => {
     try {
       const doc = await MarketModel.find({}).sort({ marketId: 1 });
-      let data = doc.map((d) => {
-        const market = docToJSON(d);
-        // Convert title from u64 array to string
-        if (market.title && Array.isArray(market.title)) {
-          market.titleString = u64ArrayToString(market.title);
-        }
-        return market;
-      });
-      res.status(200).send({
+      let data = doc.map((d) => docToJSON(d));
+      res.status(201).send({
         success: true,
         data: data,
       });
@@ -50,12 +43,8 @@ function extra(app: Express) {
       }
       
       const market = docToJSON(doc);
-      // Convert title from u64 array to string
-      if (market.title && Array.isArray(market.title)) {
-        market.titleString = u64ArrayToString(market.title);
-      }
-      
-      res.status(200).send({
+
+      res.status(201).send({
         success: true,
         data: market,
       });
@@ -90,7 +79,7 @@ function extra(app: Express) {
         return transaction;
       });
       
-      res.status(200).send({
+      res.status(201).send({
         success: true,
         data: data,
       });
@@ -128,7 +117,7 @@ function extra(app: Express) {
         return transaction;
       });
       
-      res.status(200).send({
+      res.status(201).send({
         success: true,
         data: data,
       });
@@ -168,7 +157,7 @@ function extra(app: Express) {
         return transaction;
       });
       
-      res.status(200).send({
+      res.status(201).send({
         success: true,
         data: data,
       });
@@ -207,7 +196,7 @@ function extra(app: Express) {
         };
       }
       
-      res.status(200).send({
+      res.status(201).send({
         success: true,
         data: data,
       });
@@ -232,7 +221,7 @@ function extra(app: Express) {
       
       let data = doc.map((d) => docToJSON(d));
       
-      res.status(200).send({
+      res.status(201).send({
         success: true,
         data: data,
       });
@@ -267,7 +256,7 @@ function extra(app: Express) {
         };
       });
       
-      res.status(200).send({
+      res.status(201).send({
         success: true,
         data: data.reverse(), // Return in ascending order
       });

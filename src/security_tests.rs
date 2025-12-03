@@ -362,9 +362,8 @@ mod market_safe_tests {
     use crate::math_safe::{MAX_BET_AMOUNT, MAX_SHARES};
 
     fn create_test_market() -> MarketData {
-        let title = MarketData::string_to_u64_vec("Test Market");
-        MarketData::new_with_title_u64_and_liquidity(
-            title,
+        // Note: Title is no longer stored in MarketData, use Sanity CMS for titles
+        MarketData::new_with_liquidity(
             0,
             1000,
             1000,
@@ -376,9 +375,8 @@ mod market_safe_tests {
 
     #[test]
     fn test_safe_market_creation() {
-        let title = MarketData::string_to_u64_vec("Test Market");
-        let market = MarketData::new_with_title_u64_and_liquidity(
-            title,
+        // Note: Title is no longer stored in MarketData, use Sanity CMS for titles
+        let market = MarketData::new_with_liquidity(
             0,
             1000,
             1000,
@@ -479,32 +477,13 @@ mod market_safe_tests {
         assert_eq!(payout.unwrap(), 0);
     }
 
-    #[test]
-    fn test_title_encoding_and_decoding() {
-        let original_title = "Test Market Title";
-        let title_u64_vec = MarketData::string_to_u64_vec(original_title);
-        let decoded_title = MarketData::u64_vec_to_string(&title_u64_vec);
-        
-        assert_eq!(original_title, decoded_title);
-    }
-
-    #[test]
-    fn test_long_title_encoding() {
-        let long_title = "Predict CASADADSA Will Launch on binance perp or not in three months";
-        let title_u64_vec = MarketData::string_to_u64_vec(long_title);
-        
-        // Should need 9 u64s for 68 characters
-        assert_eq!(title_u64_vec.len(), 9);
-        
-        let decoded_title = MarketData::u64_vec_to_string(&title_u64_vec);
-        assert_eq!(long_title, decoded_title);
-    }
+    // Note: Title encoding/decoding tests removed as titles are no longer stored in smart contract
+    // Market titles should be managed through Sanity CMS
 
     #[test]
     fn test_market_with_custom_liquidity() {
-        let title = MarketData::string_to_u64_vec("Custom Liquidity Market");
-        let market = MarketData::new_with_title_u64_and_liquidity(
-            title,
+        // Note: Title is no longer stored in MarketData, use Sanity CMS for titles
+        let market = MarketData::new_with_liquidity(
             0,
             1000,
             1000,

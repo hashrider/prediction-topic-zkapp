@@ -70,19 +70,18 @@ async function main() {
     // Step 2: Create a new market (admin only)
     console.log("\n2. Creating a new market...");
     try {
-      const marketTitle = "Will Bitcoin reach $100K by 2025?";
+      // Note: Title should be added to Sanity CMS separately with matching market ID
       // Using relative time offsets (relative to current counter)
-      const startTimeOffset = 0n;    // Start immediately 
+      const startTimeOffset = 0n;    // Start immediately
       const endTimeOffset = 100000n;    // End after 100k counter ticks
       const resolutionTimeOffset = 100000n; // Resolve after 100k counter ticks
       const initialLiquidity = 100000n; // 100,000 units initial shares (q/b = 0.1 for LMSR)
-      
-      console.log(`  Creating market: "${marketTitle}"`);
-      console.log(`  Initial shares: ${initialLiquidity} each side`);
+
+      console.log(`  Creating market with initial shares: ${initialLiquidity} each side`);
       console.log(`  Time offsets: start=${startTimeOffset}, end=${endTimeOffset}, resolve=${resolutionTimeOffset}`);
-      
+      console.log(`  Note: Market title should be added to Sanity CMS with the created market ID`);
+
       await adminPlayer.createMarket(
-        marketTitle,
         startTimeOffset,
         endTimeOffset,
         resolutionTimeOffset,

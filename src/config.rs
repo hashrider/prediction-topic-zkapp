@@ -41,7 +41,7 @@ pub const EVENT_PLAYER_UPDATE: u64 = 3;
 pub const PLATFORM_FEE_RATE: u64 = 100; // 1% platform fee (100/10000)
 
 // New player initial balance
-pub const NEW_PLAYER_INITIAL_BALANCE: u64 = 0; // 1000万代币
+pub const NEW_PLAYER_INITIAL_BALANCE: u64 = 100000; // Initial balance for new players
 
 // Price precision constants
 pub const BASIS_POINTS_PRECISION: u64 = 10000;     // 10,000 basis points = 100%
@@ -57,7 +57,6 @@ pub const FEE_BASIS_POINTS: u64 = 10000; // Same as BASIS_POINTS_PRECISION for f
 
 // Default market configuration
 pub struct DefaultMarketConfig {
-    pub title: &'static str,
     pub start_time: u64,
     pub end_time: u64,
     pub resolution_time: u64,
@@ -67,12 +66,11 @@ pub struct DefaultMarketConfig {
 
 lazy_static::lazy_static! {
     pub static ref DEFAULT_MARKET: DefaultMarketConfig = DefaultMarketConfig {
-        title: "Bitcoin $100K by 2024",
         start_time: 0,      // Start immediately (counter = 0)
         end_time: TICKS_PER_4_MONTHS,    // End after 4 months
         resolution_time: TICKS_PER_4_MONTHS, // Resolution time same as end time (4 months)
-        initial_yes_liquidity: 100000, // Initial YES liquidity for AMM (small liquidity)
-        initial_no_liquidity: 100000,  // Initial NO liquidity for AMM (small liquidity)
+        initial_yes_liquidity: 100000, // Initial YES liquidity for AMM
+        initial_no_liquidity: 100000,  // Initial NO liquidity for AMM
     };
 }
 

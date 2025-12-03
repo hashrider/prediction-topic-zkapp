@@ -201,19 +201,15 @@ impl Transaction {
             enforce(params.len() == 2, "withdraw_fees needs 2 params");
             Command::Activity(Activity::WithdrawFees(params[1]))
         } else if command == CREATE_MARKET {
-            enforce(params.len() >= 6, "create_market needs at least 6 params");
-            // Calculate title length: total_params - 6 (other params) = title_len
-            // params = [title_data..., start_time, end_time, resolution_time, yes_liquidity, no_liquidity, b]
-            let title_len = params.len() - 6;
-            enforce(title_len <= 8, "create_market title too long");
-            let title_u64_vec = params[0..title_len].to_vec();
-            let start_time = params[title_len];
-            let end_time = params[title_len+1];
-            let resolution_time = params[title_len+2];
-            let yes_liquidity = params[title_len+3];
-            let no_liquidity = params[title_len+4];
-            let b = params[title_len+5];
-            Command::Activity(Activity::CreateMarket(title_u64_vec, start_time, end_time, resolution_time, yes_liquidity, no_liquidity, b))
+            enforce(params.len() == 7, "create_market needs exactly 7 params");
+            // params[0] = command byte, params[1-6] = actual parameters
+            let start_time = params[1];
+            let end_time = params[2];
+            let resolution_time = params[3];
+            let yes_liquidity = params[4];
+            let no_liquidity = params[5];
+            let b = params[6];
+            Command::Activity(Activity::CreateMarket(start_time, end_time, resolution_time, yes_liquidity, no_liquidity, b))
         } else if command == INSTALL_PLAYER {
             Command::InstallPlayer
         } else {
@@ -302,7 +298,7 @@ impl Transaction {
                 if let Activity::WithdrawFees(_) = cmd {
                     unsafe { require(*pkey == *ADMIN_PUBKEY) };
                 }
-                if let Activity::CreateMarket(_, _, _, _, _, _, _) = cmd {
+                if let Activity::CreateMarket(_, _, _, _, _, _) = cmd {
                     unsafe { require(*pkey == *ADMIN_PUBKEY) };
                 }
                 cmd.handle(&pid, self.nonce, rand, counter)
@@ -361,19 +357,17 @@ impl MarketManager {
         Self::store_market(market_id, market);
     }
 
-    pub fn create_market_with_title_u64_and_liquidity(
-        title_u64_vec: Vec<u64>, 
-        start_time: u64, 
-        end_time: u64, 
+    pub fn create_market_with_liquidity(
+        start_time: u64,
+        end_time: u64,
         resolution_time: u64,
         initial_yes_liquidity: u64,
         initial_no_liquidity: u64,
         b: u64
     ) -> Result<u64, u32> {
-        let market = MarketData::new_with_title_u64_and_liquidity(
-            title_u64_vec, 
-            start_time, 
-            end_time, 
+        let market = MarketData::new_with_liquidity(
+            start_time,
+            end_time,
             resolution_time,
             initial_yes_liquidity,
             initial_no_liquidity,

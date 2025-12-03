@@ -103,7 +103,6 @@ export class IndexedObject {
 // Market data structure matching Rust backend (LMSR)
 export class MarketData {
     marketId?: bigint;
-    title: bigint[];
     startTime: bigint;
     endTime: bigint;
     resolutionTime: bigint;
@@ -121,7 +120,6 @@ export class MarketData {
     totalFeesCollected: bigint;
 
     constructor(data: any) {
-        this.title = data.title || [];
         this.startTime = data.startTime || 0n;
         this.endTime = data.endTime || 0n;
         this.resolutionTime = data.resolutionTime || 0n;
@@ -140,12 +138,7 @@ export class MarketData {
         // First element is marketId from IndexedObject
         let index = 0;
         const marketId = data[index++];
-        
-        // Read title length and title data
-        const titleLen = Number(data[index++]);
-        const title = data.slice(index, index + titleLen);
-        index += titleLen;
-        
+
         const startTime = data[index++];
         const endTime = data[index++];
         const resolutionTime = data[index++];
@@ -160,7 +153,6 @@ export class MarketData {
         const totalFeesCollected = data[index++];
 
         const marketData = new MarketData({
-            title,
             startTime,
             endTime,
             resolutionTime,
@@ -205,7 +197,6 @@ export class LiquidityHistoryEntry {
 // Market Object Schema for IndexedObject pattern - main storage (LMSR)
 const marketObjectSchema = new mongoose.Schema({
     marketId: { type: BigInt, required: true, unique: true },
-    title: { type: [BigInt], required: true },
     startTime: { type: BigInt, required: true },
     endTime: { type: BigInt, required: true },
     resolutionTime: { type: BigInt, required: true },
@@ -374,38 +365,10 @@ export function u64ArrayToString(u64Array: bigint[]): string {
 }
 
 // Helper function to convert string to u64 array (for market titles)
-export function stringToU64Array(str: string): bigint[] {
-    const bytes = new TextEncoder().encode(str);
-    const result: bigint[] = [];
-    
-    for (let i = 0; i < bytes.length; i += 8) {
-        let value = 0n;
-        for (let j = 0; j < 8 && i + j < bytes.length; j++) {
-            value |= BigInt(bytes[i + j]) << BigInt(j * 8);
-        }
-        result.push(value);
-    }
-    
-    return result;
-}
-
-// Market title length validation
-export function validateMarketTitleLength(title: string): { valid: boolean; message?: string; u64Count?: number } {
-    const u64Array = stringToU64Array(title);
-    const MAX_TITLE_U64_COUNT = 8; // Command length limit: 1 + title_len + 6 < 16, so title_len < 9, max value is 8 (for LMSR with b parameter)
-    
-    if (u64Array.length > MAX_TITLE_U64_COUNT) {
-        return {
-            valid: false,
-            message: `Title too long: ${u64Array.length} u64s (max: ${MAX_TITLE_U64_COUNT}). Current title: "${title}" (${title.length} chars, ${new TextEncoder().encode(title).length} bytes)`,
-            u64Count: u64Array.length
-        };
-    }
-    
-    return {
-        valid: true,
-        u64Count: u64Array.length
-    };
-}
+// Note: Title encoding functions removed as titles are no longer stored in smart contract
+// Market titles and metadata should be managed through Sanity CMS
+// The following functions were removed:
+// - stringToU64Array(str: string): bigint[]
+// - validateMarketTitleLength(title: string): { valid: boolean; message?: string; u64Count?: number }
 
 

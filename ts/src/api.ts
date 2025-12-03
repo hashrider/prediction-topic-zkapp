@@ -1,7 +1,6 @@
 import fetch from 'node-fetch';
 import { PlayerConvention, ZKWasmAppRpc, createCommand } from "zkwasm-minirollup-rpc";
 import { get_server_admin_key } from "zkwasm-ts-server/src/config.js";
-import { stringToU64Array, validateMarketTitleLength } from "./models.js";
 import {
     FP_SCALE,
     MAX_SHARES,
@@ -99,8 +98,8 @@ export class Player extends PlayerConvention {
     }
 
     // Create markets with relative time offsets (LMSR)
+    // Note: Title should be managed in Sanity CMS, not in smart contract
     async createMarket(
-        title: string,
         startTimeOffset: bigint,    // Offset from current counter
         endTimeOffset: bigint,      // Offset from current counter
         resolutionTimeOffset: bigint, // Offset from current counter
@@ -108,18 +107,10 @@ export class Player extends PlayerConvention {
         initialNoLiquidity: bigint,  // Initial NO shares for LMSR
         b: bigint                    // LMSR liquidity parameter (market depth)
     ) {
-        // Validate title length before creating market
-        const titleValidation = validateMarketTitleLength(title);
-        if (!titleValidation.valid) {
-            throw new Error(titleValidation.message);
-        }
-        
         let nonce = await this.getNonce();
-        const titleU64Array = stringToU64Array(title);
-        
-        // Build command: [cmd, ...title_u64s, start_time_offset, end_time_offset, resolution_time_offset, yes_liquidity, no_liquidity, b]
+
+        // Build command: [start_time_offset, end_time_offset, resolution_time_offset, yes_liquidity, no_liquidity, b]
         const params = [
-            ...titleU64Array,
             startTimeOffset,
             endTimeOffset,
             resolutionTimeOffset,
@@ -127,7 +118,7 @@ export class Player extends PlayerConvention {
             initialNoLiquidity,
             b
         ];
-        
+
         let cmd = createCommand(nonce, BigInt(CREATE_MARKET), params);
         return await this.sendTransactionWithCommand(cmd);
     }
@@ -148,8 +139,7 @@ export class Player extends PlayerConvention {
 // Updated interfaces for multi-market support (LMSR)
 export interface MarketData {
     marketId: string;
-    title: string;
-    titleString?: string; // Converted from u64 array to string
+    titleString?: string; // From Sanity CMS, not stored in smart contract
     startTime: string;
     endTime: string;
     resolutionTime: string;
@@ -445,7 +435,6 @@ export function buildWithdrawFeesTransaction(nonce: number, marketId: bigint): b
 
 export function buildCreateMarketTransaction(
     nonce: number,
-    title: string,
     startTimeOffset: bigint,     // Offset from current counter
     endTimeOffset: bigint,       // Offset from current counter
     resolutionTimeOffset: bigint, // Offset from current counter
@@ -453,17 +442,9 @@ export function buildCreateMarketTransaction(
     initialNoLiquidity: bigint,  // Initial NO shares for LMSR
     b: bigint                    // LMSR liquidity parameter
 ): bigint[] {
-    // Validate title length before creating transaction
-    const titleValidation = validateMarketTitleLength(title);
-    if (!titleValidation.valid) {
-        throw new Error(titleValidation.message);
-    }
-    
-    const titleU64Array = stringToU64Array(title);
     return [
         BigInt(nonce),
         BigInt(CREATE_MARKET),
-        ...titleU64Array,
         startTimeOffset,
         endTimeOffset,
         resolutionTimeOffset,

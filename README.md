@@ -325,8 +325,8 @@ console.log(`Liquidity data points: ${history.length}`);
 const admin = new Player("admin_private_key", rpc);
 
 // Create new market with relative time offsets (LMSR)
+// Note: Add title "Will Ethereum reach $5000 in 2024?" to Sanity CMS with the created market ID
 await admin.createMarket(
-    "Will Ethereum reach $5000 in 2024?",
     0n,      // Start immediately (0 ticks offset = 0 seconds)
     17280n,  // End in 1 day (17280 ticks * 5s = 86400s = 1 day)
     17400n,  // Resolution 10 minutes after end (17400 ticks * 5s = 87000s)
@@ -340,6 +340,8 @@ await admin.createMarket(
 // - 1 hour = 720 ticks (720 * 5s = 3600s)
 // - 1 day = 17280 ticks (17280 * 5s = 86400s)
 // All times are RELATIVE offsets from market creation time
+
+// After market is created, add the title and metadata to Sanity CMS
 
 // Resolve market
 await admin.resolveMarket(1n, true); // Market 1, YES outcome
@@ -492,8 +494,7 @@ ZKWASM_RPC_URL=http://localhost:3000
 ```typescript
 interface MarketData {
     marketId: string;
-    title: string;
-    titleString?: string;         // Human-readable title
+    titleString?: string;         // Human-readable title from Sanity CMS
     startTime: string;
     endTime: string;
     resolutionTime: string;
@@ -502,13 +503,13 @@ interface MarketData {
     b: string;                    // LMSR liquidity parameter
     prizePool: string;            // Real user funds for payouts
     totalVolume: string;          // Cumulative trading volume
-    totalYesShares: string;       // Total YES shares issued
-    totalNoShares: string;        // Total NO shares issued
     resolved: boolean;
     outcome: boolean | null;
     totalFeesCollected: string;
 }
 ```
+
+**Note**: The `titleString` field is populated from Sanity CMS on the frontend. The smart contract only stores core market logic data.
 
 ### Liquidity History (Simplified)
 ```typescript

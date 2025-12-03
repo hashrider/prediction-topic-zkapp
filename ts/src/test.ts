@@ -3,7 +3,6 @@ import dotenv from 'dotenv';
 import { PlayerConvention, ZKWasmAppRpc, createCommand } from 'zkwasm-minirollup-rpc';
 import { LeHexBN } from "zkwasm-ts-server";
 import { PredictionMarketAPI } from './api.js';
-import { stringToU64Array } from './models.js';
 
 dotenv.config();
 
@@ -99,8 +98,8 @@ class Player extends PlayerConvention {
     }
 
     // New function to create markets with relative time offsets (LMSR)
+    // Note: Title should be managed in Sanity CMS, not in smart contract
     async createMarket(
-        title: string,
         startTimeOffset: bigint,    // Offset from current counter
         endTimeOffset: bigint,      // Offset from current counter
         resolutionTimeOffset: bigint, // Offset from current counter
@@ -109,11 +108,9 @@ class Player extends PlayerConvention {
         b: bigint                    // LMSR liquidity parameter (market depth)
     ) {
         let nonce = await this.getNonce();
-        const titleU64Array = stringToU64Array(title);
-        
-        // Build command: [cmd, ...title_u64s, start_time_offset, end_time_offset, resolution_time_offset, yes_liquidity, no_liquidity, b]
+
+        // Build command: [start_time_offset, end_time_offset, resolution_time_offset, yes_liquidity, no_liquidity, b]
         const params = [
-            ...titleU64Array,
             startTimeOffset,
             endTimeOffset,
             resolutionTimeOffset,
@@ -121,7 +118,7 @@ class Player extends PlayerConvention {
             initialNoLiquidity,
             b
         ];
-        
+
         let cmd = createCommand(nonce, BigInt(CREATE_MARKET), params);
         return await this.sendTransactionWithCommand(cmd);
     }
@@ -259,9 +256,9 @@ async function testMultiMarketPrediction() {
         
         // Market 1: Bitcoin price prediction
         // Using smaller q/b ratio (~0.1) for LMSR Taylor approximations to work correctly
+        // Note: Title "Will Bitcoin reach $130K by end of 2025?" should be added to Sanity CMS with id=1
         console.log("Creating Market 1: Bitcoin Price Prediction");
         await admin.createMarket(
-            "Will Bitcoin reach $130K by end of 2025?",
             0n,    // Start immediately (offset 0)
             100000n,  // End after 100K counter ticks
             110000n,  // Resolve after 100K counter ticks
@@ -269,13 +266,13 @@ async function testMultiMarketPrediction() {
             100000n,   // 100K initial NO shares (q/b = 0.1)
             1000000n   // b parameter for LMSR
         );
-        
+
         await new Promise(resolve => setTimeout(resolve, 2000));
-        
+
         // Market 2: Election prediction
+        // Note: Title "Will candidate A win the election?" should be added to Sanity CMS with id=2
         console.log("Creating Market 2: Election Prediction");
         await admin.createMarket(
-            "Will candidate A win the election?",
             0n,    // Start immediately (offset 0)
             50000n,  // End after 50K counter ticks
             50000n,  // Resolve after 50K counter ticks
@@ -283,13 +280,13 @@ async function testMultiMarketPrediction() {
             100000n,  // 100K initial NO shares (q/b = 0.1)
             1000000n   // b parameter for LMSR
         );
-        
+
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         // Market 3: Sports prediction
+        // Note: Title "Will Team X win the championship?" should be added to Sanity CMS with id=3
         console.log("Creating Market 3: Sports Prediction");
         await admin.createMarket(
-            "Will Team X win the championship?",
             0n,    // Start immediately (offset 0)
             30000n,  // End after 30K counter ticks
             30000n,  // Resolve after 30K counter ticks
