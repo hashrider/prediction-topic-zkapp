@@ -139,7 +139,6 @@ export class Player extends PlayerConvention {
 // Updated interfaces for multi-market support (LMSR)
 export interface MarketData {
     marketId: string;
-    titleString?: string; // From Sanity CMS, not stored in smart contract
     startTime: string;
     endTime: string;
     resolutionTime: string;
@@ -151,6 +150,7 @@ export interface MarketData {
     resolved: boolean;
     outcome: boolean | null;
     totalFeesCollected: string;
+    titleString?: string; // From Sanity CMS, not stored in smart contract
 }
 
 export interface TransactionData {
