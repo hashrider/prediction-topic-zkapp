@@ -501,7 +501,7 @@ interface MarketData {
     totalYesShares: string;       // Total YES shares (LMSR q_yes)
     totalNoShares: string;         // Total NO shares (LMSR q_no)
     b: string;                    // LMSR liquidity parameter
-    prizePool: string;            // Real user funds for payouts
+    poolBalance: string;            // Real user funds for payouts
     totalVolume: string;          // Cumulative trading volume
     resolved: boolean;
     outcome: boolean | null;
